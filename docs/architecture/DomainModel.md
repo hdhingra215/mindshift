@@ -122,7 +122,7 @@ _Cardinality summary:_ Player 1—1 Profile · Player 1—* Session · Session 1
 - **Player / Profile:** created at sign-up; updated via settings; on account deletion, player-owned data is removed or anonymized per privacy policy.
 - **Session:** created when play begins; accumulates Attempts; closed with a summary when the sitting ends or times out; retained for history.
 - **Attempt:** created on each scenario play; effectively immutable once recorded (append-only fact); retained as the basis for stats and mastery.
-- **Reflection:** created after an attempt; editable by the player; retained with the attempt.
+- **Reflection:** created after an attempt; immutable once created (never edited or deleted); retained with the attempt.
 - **XPTransaction:** created on award; immutable; never edited or deleted (ledger integrity). Corrections are new compensating transactions.
 - **Progress / Statistics:** created with the player; continuously updated as derived rollups; rebuildable from source events.
 - **BiasMastery:** created on first engagement with a bias; updated per relevant attempt; decays over time by rule.

@@ -139,7 +139,7 @@ Convention: every table has `id` (UUID PK) and audit fields (§6) unless noted. 
 #### `bias_mastery`
 - **Purpose:** per-player, per-bias proficiency signal.
 - **PK:** `id`.
-- **Key columns:** `player_id`, `bias_id`, `mastery_score`, `correct_count`, `attempt_count`, `distinct_contexts`, `last_seen_at`, `decays_at`.
+- **Key columns:** `player_id`, `bias_id`, `mastery_level`, `total_attempts`, `correct_attempts`, `distinct_contexts`, `last_practiced_at`, `decays_at`.
 - **FKs:** `player_id` → `profiles.id`; `bias_id` → `biases.id`. Unique(`player_id`,`bias_id`).
 
 #### `streaks`
@@ -151,13 +151,13 @@ Convention: every table has `id` (UUID PK) and audit fields (§6) unless noted. 
 #### `player_achievements` (junction)
 - **Purpose:** which player earned which achievement, when.
 - **PK:** surrogate `id`, unique(`player_id`,`achievement_id`).
-- **Key columns:** `earned_at`, `progress_snapshot` (JSONB, optional).
+- **Key columns:** `unlocked_at`, `progress_snapshot` (JSONB, optional).
 - **FKs:** `player_id` → `profiles.id`; `achievement_id` → `achievements.id`.
 
 #### `statistics`
 - **Purpose:** per-player aggregated metrics for dashboards (rebuildable rollup).
 - **PK:** `id` (or `player_id`).
-- **Key columns:** `player_id` (unique), `metrics` (JSONB: per-category/bias breakdowns, trends), `computed_at`.
+- **Key columns:** `player_id` (unique), `total_sessions`, `total_attempts`, `total_play_time_ms`, `average_response_time_ms`, `total_reflections`, `last_played_at`, `metrics` (JSONB: per-category/bias breakdowns, trends), `computed_at`.
 - **FKs:** `player_id` → `profiles.id` (unique).
 - **Note:** can start as a materialized view; promoted to a table if write cost warrants.
 
@@ -257,14 +257,14 @@ Optional provenance on content: `created_by` / `updated_by` referencing the auth
 **Soft delete (via `deleted_at`) — recoverable, preserves references:**
 - Content: `scenarios`, `scenario_choices`, `biases`, `categories`, `scenario_packs`, `achievements`. Use `status='archived'` and/or `deleted_at` so historical `attempts` remain valid. Content is **retired, not destroyed.**
 - `profiles`: soft-delete/anonymize option before hard erasure, to preserve aggregate integrity where legally allowed.
-- `reflections`, `notifications`: soft delete (player may recover / audit).
+- `notifications`: soft delete (player may recover / audit).
 
 **Hard delete only:**
 - Full account erasure (right-to-be-forgotten) cascades and hard-deletes player-owned data intentionally.
 - Junctions (`scenario_biases`, `scenario_pack_items`) — hard delete when a link is genuinely removed.
 
 **Never deleted (append-only, immutable):**
-- `attempts`, `xp_transactions`, `player_achievements` — corrected only by compensating records, removed only via full account erasure.
+- `attempts`, `reflections`, `xp_transactions`, `player_achievements` — corrected only by compensating records, removed only via full account erasure.
 
 Rollups (`progress`, `statistics`, `bias_mastery`, `streaks`) are not soft-deleted — they're recomputable and tied 1:1 to a living player.
 

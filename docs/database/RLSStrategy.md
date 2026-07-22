@@ -74,7 +74,7 @@ Legend — **Anon** = anonymous, **Player** = authenticated player (row-scoped t
 | `profiles` | Own; public fields of others if `is_public`; Admin | Own (on signup) | Own (safe fields) | Own (account deletion) / Admin |
 | `sessions` | Own; Admin | Own | Own | Own / Edge |
 | `attempts` | Own; Admin | Own (or Edge) *(see note)* | — (immutable) | — (only via account erasure/Edge) |
-| `reflections` | Own; Admin | Own | Own | Own |
+| `reflections` | Own; Admin | Own | — (immutable) | — (only via account erasure/Edge) |
 | `progress` | Own; Admin | Edge | Edge | Edge / cascade |
 | `xp_transactions` | Own; Admin | **Edge only** | — (immutable) | — (cascade only) |
 | `bias_mastery` | Own; Admin | Edge | Edge | Edge / cascade |
@@ -109,9 +109,9 @@ Legend — **Anon** = anonymous, **Player** = authenticated player (row-scoped t
 - **Ownership derived from the session.** Every row carries `player_id` (or `id = auth.uid()` for `profiles`). All policies compare it to `auth.uid()`. Client-supplied owner IDs are ignored.
 - **Strict isolation.** A player can read and act on only their own rows. No player can enumerate or access another's data through the public API.
 - **Player-writable vs. edge-only:**
-  - Player may write: `profiles` (safe fields), `sessions`, `reflections`, `notifications` (mark read), and — with server oversight — `attempts` choice data.
+  - Player may write: `profiles` (safe fields), `sessions`, `reflections` (insert only — immutable once created), `notifications` (mark read), and — with server oversight — `attempts` choice data.
   - Edge-only writes: `xp_transactions`, `player_achievements`, `progress`, `bias_mastery`, `streaks`, `statistics`. Players cannot forge economy or mastery state.
-- **Immutable facts:** `attempts`, `xp_transactions`, `player_achievements` are append-only — no player UPDATE/DELETE (except full account erasure, handled server-side/cascade).
+- **Immutable facts:** `attempts`, `reflections`, `xp_transactions`, `player_achievements` are append-only — no player UPDATE/DELETE (except full account erasure, handled server-side/cascade).
 - **`profiles` public fields:** if `is_public` is set (leaderboard opt-in), only a whitelisted subset (display name, avatar, level) is readable by others; private fields never are.
 - **Account deletion** (right-to-erasure) cascades player-owned data; executed through a controlled workflow.
 
