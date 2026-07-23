@@ -1,20 +1,22 @@
-import { RouterProvider } from '@tanstack/react-router'
 import { AppProviders } from './providers/app-providers'
 import { ErrorBoundary } from './errors/error-boundary'
-import { router } from './router/router'
+import { AuthProvider } from '@/features/auth'
+import { AppRouter } from './router/app-router'
 
 /**
  * Application root.
  *
- * Composes global infrastructure only: app-level error boundary → providers →
- * router. Routing (layout, pages, pending/error/not-found boundaries) is
- * driven by TanStack Router. No business logic yet.
+ * Composes global infrastructure: app-level error boundary → providers →
+ * auth → router. AuthProvider sits above the router so route guards can read
+ * session state; AppRouter gates the router on session restore.
  */
 export default function App() {
   return (
     <ErrorBoundary>
       <AppProviders>
-        <RouterProvider router={router} />
+        <AuthProvider>
+          <AppRouter />
+        </AuthProvider>
       </AppProviders>
     </ErrorBoundary>
   )

@@ -14,8 +14,11 @@ import { Route as appDashboardRouteImport } from './routes/(app)/dashboard'
 import { Route as appPlayRouteImport } from './routes/(app)/play'
 import { Route as appProfileRouteImport } from './routes/(app)/profile'
 import { Route as appSettingsRouteImport } from './routes/(app)/settings'
+import { Route as authAuthForgotPasswordRouteImport } from './routes/(auth)/auth/forgot-password'
 import { Route as authAuthLoginRouteImport } from './routes/(auth)/auth/login'
+import { Route as authAuthResetPasswordRouteImport } from './routes/(auth)/auth/reset-password'
 import { Route as authAuthSignupRouteImport } from './routes/(auth)/auth/signup'
+import { Route as authAuthVerifyEmailRouteImport } from './routes/(auth)/auth/verify-email'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -42,14 +45,29 @@ const appSettingsRoute = appSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const authAuthForgotPasswordRoute = authAuthForgotPasswordRouteImport.update({
+  id: '/(auth)/auth/forgot-password',
+  path: '/auth/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const authAuthLoginRoute = authAuthLoginRouteImport.update({
   id: '/(auth)/auth/login',
   path: '/auth/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const authAuthResetPasswordRoute = authAuthResetPasswordRouteImport.update({
+  id: '/(auth)/auth/reset-password',
+  path: '/auth/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const authAuthSignupRoute = authAuthSignupRouteImport.update({
   id: '/(auth)/auth/signup',
   path: '/auth/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const authAuthVerifyEmailRoute = authAuthVerifyEmailRouteImport.update({
+  id: '/(auth)/auth/verify-email',
+  path: '/auth/verify-email',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -59,8 +77,11 @@ export interface FileRoutesByFullPath {
   '/play': typeof appPlayRoute
   '/profile': typeof appProfileRoute
   '/settings': typeof appSettingsRoute
+  '/auth/forgot-password': typeof authAuthForgotPasswordRoute
   '/auth/login': typeof authAuthLoginRoute
+  '/auth/reset-password': typeof authAuthResetPasswordRoute
   '/auth/signup': typeof authAuthSignupRoute
+  '/auth/verify-email': typeof authAuthVerifyEmailRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -68,8 +89,11 @@ export interface FileRoutesByTo {
   '/play': typeof appPlayRoute
   '/profile': typeof appProfileRoute
   '/settings': typeof appSettingsRoute
+  '/auth/forgot-password': typeof authAuthForgotPasswordRoute
   '/auth/login': typeof authAuthLoginRoute
+  '/auth/reset-password': typeof authAuthResetPasswordRoute
   '/auth/signup': typeof authAuthSignupRoute
+  '/auth/verify-email': typeof authAuthVerifyEmailRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -78,8 +102,11 @@ export interface FileRoutesById {
   '/(app)/play': typeof appPlayRoute
   '/(app)/profile': typeof appProfileRoute
   '/(app)/settings': typeof appSettingsRoute
+  '/(auth)/auth/forgot-password': typeof authAuthForgotPasswordRoute
   '/(auth)/auth/login': typeof authAuthLoginRoute
+  '/(auth)/auth/reset-password': typeof authAuthResetPasswordRoute
   '/(auth)/auth/signup': typeof authAuthSignupRoute
+  '/(auth)/auth/verify-email': typeof authAuthVerifyEmailRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -89,8 +116,11 @@ export interface FileRouteTypes {
     | '/play'
     | '/profile'
     | '/settings'
+    | '/auth/forgot-password'
     | '/auth/login'
+    | '/auth/reset-password'
     | '/auth/signup'
+    | '/auth/verify-email'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -98,8 +128,11 @@ export interface FileRouteTypes {
     | '/play'
     | '/profile'
     | '/settings'
+    | '/auth/forgot-password'
     | '/auth/login'
+    | '/auth/reset-password'
     | '/auth/signup'
+    | '/auth/verify-email'
   id:
     | '__root__'
     | '/'
@@ -107,8 +140,11 @@ export interface FileRouteTypes {
     | '/(app)/play'
     | '/(app)/profile'
     | '/(app)/settings'
+    | '/(auth)/auth/forgot-password'
     | '/(auth)/auth/login'
+    | '/(auth)/auth/reset-password'
     | '/(auth)/auth/signup'
+    | '/(auth)/auth/verify-email'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -117,8 +153,11 @@ export interface RootRouteChildren {
   appPlayRoute: typeof appPlayRoute
   appProfileRoute: typeof appProfileRoute
   appSettingsRoute: typeof appSettingsRoute
+  authAuthForgotPasswordRoute: typeof authAuthForgotPasswordRoute
   authAuthLoginRoute: typeof authAuthLoginRoute
+  authAuthResetPasswordRoute: typeof authAuthResetPasswordRoute
   authAuthSignupRoute: typeof authAuthSignupRoute
+  authAuthVerifyEmailRoute: typeof authAuthVerifyEmailRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -158,6 +197,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof appSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/(auth)/auth/forgot-password': {
+      id: '/(auth)/auth/forgot-password'
+      path: '/auth/forgot-password'
+      fullPath: '/auth/forgot-password'
+      preLoaderRoute: typeof authAuthForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/(auth)/auth/login': {
       id: '/(auth)/auth/login'
       path: '/auth/login'
@@ -165,11 +211,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof authAuthLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/(auth)/auth/reset-password': {
+      id: '/(auth)/auth/reset-password'
+      path: '/auth/reset-password'
+      fullPath: '/auth/reset-password'
+      preLoaderRoute: typeof authAuthResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/(auth)/auth/signup': {
       id: '/(auth)/auth/signup'
       path: '/auth/signup'
       fullPath: '/auth/signup'
       preLoaderRoute: typeof authAuthSignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(auth)/auth/verify-email': {
+      id: '/(auth)/auth/verify-email'
+      path: '/auth/verify-email'
+      fullPath: '/auth/verify-email'
+      preLoaderRoute: typeof authAuthVerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -181,8 +241,11 @@ const rootRouteChildren: RootRouteChildren = {
   appPlayRoute: appPlayRoute,
   appProfileRoute: appProfileRoute,
   appSettingsRoute: appSettingsRoute,
+  authAuthForgotPasswordRoute: authAuthForgotPasswordRoute,
   authAuthLoginRoute: authAuthLoginRoute,
+  authAuthResetPasswordRoute: authAuthResetPasswordRoute,
   authAuthSignupRoute: authAuthSignupRoute,
+  authAuthVerifyEmailRoute: authAuthVerifyEmailRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

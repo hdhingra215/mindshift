@@ -21,6 +21,12 @@
     --color-chart-3: var(--chart-3);
     --color-chart-2: var(--chart-2);
     --color-chart-1: var(--chart-1);
+    --color-info-foreground: var(--info-foreground);
+    --color-info: var(--info);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-warning: var(--warning);
+    --color-success-foreground: var(--success-foreground);
+    --color-success: var(--success);
     --color-ring: var(--ring);
     --color-input: var(--input);
     --color-border: var(--border);
@@ -48,73 +54,94 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * Design tokens — source of truth: docs/design/DesignSystem.md.
+ * Dark is the default and primary theme (warm charcoal + terracotta accent).
+ * Light is a provisional warm counterpart per DesignSystem §11 (future); the
+ * architecture supports it via a pure token swap — components never change.
+ * Values are the fixed brand hex from the Design System; the terracotta accent
+ * lives in `primary`, and `accent` stays a neutral hover surface to preserve
+ * accent discipline (terracotta is reserved for primary actions / brand).
+ */
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
+    --background: #f7f4ec;
+    --foreground: #2b2a27;
+    --card: #fcfaf4;
+    --card-foreground: #2b2a27;
+    --popover: #fcfaf4;
+    --popover-foreground: #2b2a27;
+    --primary: #b9532f;
+    --primary-foreground: #fbf8f1;
+    --secondary: #ece6d8;
+    --secondary-foreground: #2b2a27;
+    --muted: #ece6d8;
+    --muted-foreground: #6e675b;
+    --accent: #ece6d8;
+    --accent-foreground: #2b2a27;
+    --destructive: #b44a4a;
+    --border: #e0d9ca;
+    --input: #e0d9ca;
+    --ring: #b9532f;
+    --success: #5c7b4d;
+    --success-foreground: #fbf8f1;
+    --warning: #b5873a;
+    --warning-foreground: #2b2a27;
+    --info: #4f7aad;
+    --info-foreground: #fbf8f1;
+    --chart-1: #b9532f;
+    --chart-2: #5c7b4d;
+    --chart-3: #b5873a;
+    --chart-4: #4f7aad;
+    --chart-5: #6e675b;
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --sidebar: #fcfaf4;
+    --sidebar-foreground: #2b2a27;
+    --sidebar-primary: #b9532f;
+    --sidebar-primary-foreground: #fbf8f1;
+    --sidebar-accent: #ece6d8;
+    --sidebar-accent-foreground: #2b2a27;
+    --sidebar-border: #e0d9ca;
+    --sidebar-ring: #b9532f;
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --background: #2b2a27;
+    --foreground: #f0ece0;
+    --card: #34322f;
+    --card-foreground: #f0ece0;
+    --popover: #3d3a36;
+    --popover-foreground: #f0ece0;
+    --primary: #c96442;
+    --primary-foreground: #f0ece0;
+    --secondary: #3d3a36;
+    --secondary-foreground: #f0ece0;
+    --muted: #34322f;
+    --muted-foreground: #a79f91;
+    --accent: #3d3a36;
+    --accent-foreground: #f0ece0;
+    --destructive: #c25b5b;
+    --border: #4a4640;
+    --input: #4a4640;
+    --ring: #c96442;
+    --success: #6d8e5d;
+    --success-foreground: #2b2a27;
+    --warning: #d6a249;
+    --warning-foreground: #2b2a27;
+    --info: #6b95c7;
+    --info-foreground: #2b2a27;
+    --chart-1: #c96442;
+    --chart-2: #6d8e5d;
+    --chart-3: #d6a249;
+    --chart-4: #6b95c7;
+    --chart-5: #a79f91;
+    --sidebar: #34322f;
+    --sidebar-foreground: #f0ece0;
+    --sidebar-primary: #c96442;
+    --sidebar-primary-foreground: #f0ece0;
+    --sidebar-accent: #3d3a36;
+    --sidebar-accent-foreground: #f0ece0;
+    --sidebar-border: #4a4640;
+    --sidebar-ring: #c96442;
 }
 
 @layer base {
@@ -127,4 +154,20 @@
   html {
     @apply font-sans;
     }
+}
+
+/*
+ * Global reduced-motion guarantee (InteractionPrinciples §2, §12).
+ * When the user prefers reduced motion, neutralize all animation/transition
+ * so meaning is conveyed by state, color, and text alone — never by movement.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

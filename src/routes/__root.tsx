@@ -1,13 +1,17 @@
-import { createRootRoute, Outlet } from '@tanstack/react-router'
+import { createRootRouteWithContext, Outlet } from '@tanstack/react-router'
 import { AppLayout } from '@/app/layout/app-layout'
+import type { AuthContextValue } from '@/features/auth'
 
 /**
- * Root route + root layout.
- *
- * Wraps every route in the global AppLayout shell and renders the active
- * route via <Outlet />. Route-level pending / error / not-found fallbacks are
- * configured on the router instance.
+ * Router context — dependency-injected into every route's `beforeLoad`.
+ * Auth lives here so route guards (requireAuth / redirectIfAuthenticated) can
+ * read the resolved session synchronously. The live value is supplied by
+ * <RouterProvider context> in app-router.
  */
+export type RouterContext = {
+  auth: AuthContextValue
+}
+
 function RootLayout() {
   return (
     <AppLayout>
@@ -16,6 +20,6 @@ function RootLayout() {
   )
 }
 
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<RouterContext>()({
   component: RootLayout,
 })

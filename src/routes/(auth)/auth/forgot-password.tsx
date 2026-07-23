@@ -1,29 +1,29 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { AuthShell, SignupForm, redirectIfAuthenticated } from '@/features/auth'
+import { AuthShell, ForgotPasswordForm, redirectIfAuthenticated } from '@/features/auth'
 
-function SignupPage() {
+function ForgotPasswordPage() {
   return (
     <AuthShell
-      title="Start thinking sharper."
-      description="A few minutes a day is all it takes. Let’s find the first trap your mind falls for."
+      title="Forgot your password?"
+      description="It happens. Enter your email and we’ll send a link to set a new one — no harm done."
       footer={
         <>
-          Already have an account?{' '}
+          Remembered it?{' '}
           <Link
             to="/auth/login"
             className="rounded-md font-medium text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
           >
-            Log in
+            Back to login
           </Link>
         </>
       }
     >
-      <SignupForm />
+      <ForgotPasswordForm />
     </AuthShell>
   )
 }
 
-export const Route = createFileRoute('/(auth)/auth/signup')({
+export const Route = createFileRoute('/(auth)/auth/forgot-password')({
   beforeLoad: ({ context }) => redirectIfAuthenticated(context.auth),
-  component: SignupPage,
+  component: ForgotPasswordPage,
 })

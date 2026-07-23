@@ -1,6 +1,7 @@
 import { createRouter } from '@tanstack/react-router'
 import { routeTree } from '@/routeTree.gen'
 import { RootLoading } from '@/app/layout/root-loading'
+import type { AuthContextValue } from '@/features/auth'
 import { NotFound } from './not-found'
 import { RouteError } from './route-error'
 
@@ -11,10 +12,15 @@ import { RouteError } from './route-error'
  * - defaultErrorComponent    → route error boundary
  * - defaultNotFoundComponent → 404
  *
- * No auth, data, or context wiring yet — pure routing infrastructure.
+ * `context.auth` is a placeholder here; the live auth value is injected by
+ * <RouterProvider context={{ auth }}> in app-router, and refreshed on auth
+ * changes via router.invalidate() so guards re-run.
  */
 export const router = createRouter({
   routeTree,
+  context: {
+    auth: undefined as unknown as AuthContextValue,
+  },
   defaultPendingComponent: RootLoading,
   defaultErrorComponent: RouteError,
   defaultNotFoundComponent: NotFound,
