@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 
+import { FloatingBackground, MouseFollower } from '@/components/motion'
+
 type AppLayoutProps = {
   children?: ReactNode
 }
@@ -7,15 +9,25 @@ type AppLayoutProps = {
 /**
  * Global layout shell.
  *
- * The outermost structural frame for the app: sets the page canvas
- * (background/foreground tokens, full viewport height) and hosts the main
- * content region. Header, navigation, and footer slots are added alongside
- * routing in a later step. No page content lives here.
+ * The outermost structural frame: sets the page canvas (background/foreground
+ * tokens, full viewport height) and hosts the main content region.
+ *
+ * It also mounts the two ambient lighting layers exactly once, behind
+ * everything. Mounting them here rather than per-page is what makes the product
+ * feel like a continuous lit space you move around in, instead of a set of
+ * pages that each stage their own atmosphere — and it means one instance of
+ * each effect exists no matter how the router re-renders.
+ *
+ * Both are decorative by construction: `aria-hidden`, `pointer-events: none`,
+ * and absent entirely under reduced motion or without a fine pointer. Removing
+ * them changes nothing about what the product communicates.
  */
 export function AppLayout({ children }: AppLayoutProps) {
   return (
-    <div className="min-h-dvh bg-background text-foreground antialiased">
-      <main className="min-h-dvh">{children}</main>
+    <div className="relative min-h-dvh bg-background text-foreground antialiased">
+      <FloatingBackground />
+      <MouseFollower />
+      <main className="relative min-h-dvh">{children}</main>
     </div>
   )
 }

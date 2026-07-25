@@ -1,16 +1,36 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { requireAuth } from '@/features/auth'
+import { useAuth } from '@/features/auth'
+import { PageSkeleton } from '@/components/layout/page-skeleton'
+import { toUserIdentity } from '@/components/layout/user-identity'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 function ProfilePage() {
+  const { user } = useAuth()
+  const identity = toUserIdentity(user)
+
   return (
-    <section className="flex min-h-dvh flex-col items-center justify-center gap-2 px-6 text-center">
-      <h1 className="font-heading text-2xl font-semibold text-foreground">Profile</h1>
-      <p className="text-sm text-muted-foreground">Your growth story lives here — coming soon.</p>
-    </section>
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center gap-4">
+        <Avatar className="size-14">
+          {identity.avatarUrl ? <AvatarImage src={identity.avatarUrl} alt="" /> : null}
+          <AvatarFallback className="text-base">{identity.initials}</AvatarFallback>
+        </Avatar>
+        <div className="flex min-w-0 flex-col">
+          <h1 className="truncate font-heading text-2xl font-semibold tracking-tight text-foreground">
+            {identity.displayName}
+          </h1>
+          <p className="truncate text-sm text-muted-foreground">{identity.email}</p>
+        </div>
+      </div>
+      <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
+        Your growth story — mastery, achievements, and stats — will live here.
+        Coming in a later phase.
+      </p>
+    </div>
   )
 }
 
 export const Route = createFileRoute('/(app)/profile')({
-  beforeLoad: ({ context, location }) => requireAuth(context.auth, location.href),
+  pendingComponent: PageSkeleton,
   component: ProfilePage,
 })

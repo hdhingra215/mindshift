@@ -1,48 +1,43 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { LogOut } from 'lucide-react'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Logo } from '@/components/shared/logo'
-import { useAuth, requireAuth } from '@/features/auth'
+import { useAuth } from '@/features/auth'
+import { PageSkeleton } from '@/components/layout/page-skeleton'
+import { toUserIdentity } from '@/components/layout/user-identity'
 
-function greetingName(displayName: unknown, email: string | undefined): string {
-  if (typeof displayName === 'string' && displayName.trim().length > 0) {
-    return displayName.trim()
-  }
-  return email?.split('@')[0] ?? 'there'
+function timeGreeting(): string {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Morning'
+  if (hour < 18) return 'Afternoon'
+  return 'Evening'
 }
 
 function DashboardPage() {
-  const { user, signOut } = useAuth()
-  const navigate = useNavigate()
-  const name = greetingName(user?.user_metadata?.display_name, user?.email)
-
-  async function handleSignOut() {
-    await signOut()
-    void navigate({ to: '/' })
-  }
+  const { user } = useAuth()
+  const { displayName } = toUserIdentity(user)
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="flex items-center justify-between border-b border-border px-6 py-4">
-        <Logo />
-        <Button variant="ghost" size="lg" onClick={handleSignOut}>
-          <LogOut className="size-4" aria-hidden="true" />
-          Sign out
+    <div className="flex flex-col gap-2">
+      <p className="text-sm font-medium text-primary">{timeGreeting()}.</p>
+      <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
+        Welcome back, {displayName}.
+      </h1>
+      <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
+        Ready to catch your brain in the act? Play a scenario and train the reflex.
+      </p>
+      <div className="pt-2">
+        <Button asChild size="lg">
+          <Link to="/play">
+            Start playing
+            <ArrowRight className="size-4" aria-hidden="true" />
+          </Link>
         </Button>
-      </header>
-      <main className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
-          Welcome back, {name}.
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Your training dashboard is taking shape — the core loop lands next.
-        </p>
-      </main>
+      </div>
     </div>
   )
 }
 
 export const Route = createFileRoute('/(app)/dashboard')({
-  beforeLoad: ({ context, location }) => requireAuth(context.auth, location.href),
+  pendingComponent: PageSkeleton,
   component: DashboardPage,
 })

@@ -21,6 +21,11 @@
     --color-chart-3: var(--chart-3);
     --color-chart-2: var(--chart-2);
     --color-chart-1: var(--chart-1);
+    --color-reward-foreground: var(--reward-foreground);
+    --color-reward: var(--reward);
+    --color-brand: var(--brand);
+    --color-elevated-foreground: var(--elevated-foreground);
+    --color-elevated: var(--elevated);
     --color-info-foreground: var(--info-foreground);
     --color-info: var(--info);
     --color-warning-foreground: var(--warning-foreground);
@@ -52,96 +57,286 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
+
+    /* BKLit chart tokens. Upstream emits `var(----name)`; corrected to `var(--name)`. */
+    --color-chart-scale-pattern-color: var(--chart-scale-pattern-color);
+    --color-chart-scale-05: var(--chart-scale-05);
+    --color-chart-scale-04: var(--chart-scale-04);
+    --color-chart-scale-03: var(--chart-scale-03);
+    --color-chart-scale-02: var(--chart-scale-02);
+    --color-chart-scale-01: var(--chart-scale-01);
+    --color-chart-label: var(--chart-label);
+    --color-chart-marker-foreground: var(--chart-marker-foreground);
+    --color-chart-marker-border: var(--chart-marker-border);
+    --color-chart-marker-background: var(--chart-marker-background);
+    --color-chart-tooltip-muted: var(--chart-tooltip-muted);
+    --color-chart-tooltip-foreground: var(--chart-tooltip-foreground);
+    --color-chart-tooltip-background: var(--chart-tooltip-background);
+    --color-chart-grid: var(--chart-grid);
+    --color-chart-crosshair: var(--chart-crosshair);
+    --color-chart-foreground-muted: var(--chart-foreground-muted);
+    --color-chart-foreground: var(--chart-foreground);
+    --color-chart-background: var(--chart-background);
+    --color-legend-track: var(--legend-track);
+    --color-legend-muted-foreground: var(--legend-muted-foreground);
+    --color-legend-muted: var(--legend-muted);
+    --color-legend-foreground: var(--legend-foreground);
+    --color-legend: var(--legend);
 }
 
 /*
- * Design tokens — source of truth: docs/design/DesignSystem.md.
- * Dark is the default and primary theme (warm charcoal + terracotta accent).
- * Light is a provisional warm counterpart per DesignSystem §11 (future); the
- * architecture supports it via a pure token swap — components never change.
- * Values are the fixed brand hex from the Design System; the terracotta accent
- * lives in `primary`, and `accent` stays a neutral hover surface to preserve
- * accent discipline (terracotta is reserved for primary actions / brand).
+ * ─────────────────────────────────────────────────────────────────────────────
+ * DESIGN TOKENS — source of truth: docs/design/DesignSystem.md
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Dark is the default and primary theme: a true deep black canvas with a
+ * five-colour expressive accent set. Depth is built from layered surfaces,
+ * light (glow) and shadow rather than from hue variety.
+ *
+ * Semantic role map — each accent owns exactly one job, so the palette stays
+ * disciplined even though it is wider than a single-accent system:
+ *
+ *   purple  #8B5CF6  brand / primary action / focus         (--brand, --primary)
+ *   orange  #FF7A1A  XP, rewards, energy, progress          (--reward)
+ *   yellow  #FFC53D  warning, streak-at-risk, caution       (--warning)
+ *   blue    #3B9EFF  correct catches, mastery, success      (--success)
+ *   red     #F26D6D  errors, destructive, failed states     (--destructive)
+ *   violet  #A78BFA  info, AI coaching, tips                (--info)
+ *
+ * Blue-for-success / red-for-error is deliberate: it is the most colour-blind
+ * distinguishable success/error pair available inside this palette. Per
+ * DesignSystem §10 colour is never the sole signal regardless.
+ *
+ * `--primary` is a slightly deeper purple than `--brand` so that white label
+ * text on a primary fill clears WCAG AA (≈5.4:1). `--brand` is the lighter,
+ * more luminous hue reserved for glow, rings, graphics and non-text accents
+ * (≥3:1 against the canvas, which is the AA bar for graphical boundaries).
+ *
+ * Light theme is a provisional counterpart per DesignSystem §11 — a pure token
+ * swap; no component ever reads a raw value.
  */
 :root {
-    --background: #f7f4ec;
-    --foreground: #2b2a27;
-    --card: #fcfaf4;
-    --card-foreground: #2b2a27;
-    --popover: #fcfaf4;
-    --popover-foreground: #2b2a27;
-    --primary: #b9532f;
-    --primary-foreground: #fbf8f1;
-    --secondary: #ece6d8;
-    --secondary-foreground: #2b2a27;
-    --muted: #ece6d8;
-    --muted-foreground: #6e675b;
-    --accent: #ece6d8;
-    --accent-foreground: #2b2a27;
-    --destructive: #b44a4a;
-    --border: #e0d9ca;
-    --input: #e0d9ca;
-    --ring: #b9532f;
-    --success: #5c7b4d;
-    --success-foreground: #fbf8f1;
-    --warning: #b5873a;
-    --warning-foreground: #2b2a27;
-    --info: #4f7aad;
-    --info-foreground: #fbf8f1;
-    --chart-1: #b9532f;
-    --chart-2: #5c7b4d;
-    --chart-3: #b5873a;
-    --chart-4: #4f7aad;
-    --chart-5: #6e675b;
+    /* Surfaces — light counterpart (provisional) */
+    --background: #fafafb;
+    --foreground: #101014;
+    --card: #ffffff;
+    --card-foreground: #101014;
+    --elevated: #f3f3f6;
+    --elevated-foreground: #101014;
+    --popover: #ffffff;
+    --popover-foreground: #101014;
+    --secondary: #f0f0f4;
+    --secondary-foreground: #101014;
+    --muted: #f0f0f4;
+    --muted-foreground: #56565f;
+    --accent: #f0f0f4;
+    --accent-foreground: #101014;
+    --border: #e3e3e9;
+    --input: #b9b9c4;
+
+    /* Accents */
+    --brand: #7c3aed;
+    --primary: #6d28d9;
+    --primary-foreground: #ffffff;
+    --ring: #7c3aed;
+    --reward: #c2410c;
+    --reward-foreground: #ffffff;
+    --success: #1d6fd0;
+    --success-foreground: #ffffff;
+    --warning: #a16207;
+    --warning-foreground: #ffffff;
+    --destructive: #c73f3f;
+    --info: #6d28d9;
+    --info-foreground: #ffffff;
+
+    --chart-1: #6d28d9;
+    --chart-2: #c2410c;
+    --chart-3: #1d6fd0;
+    --chart-4: #a16207;
+    --chart-5: #c73f3f;
+
     --radius: 0.625rem;
-    --sidebar: #fcfaf4;
-    --sidebar-foreground: #2b2a27;
-    --sidebar-primary: #b9532f;
-    --sidebar-primary-foreground: #fbf8f1;
-    --sidebar-accent: #ece6d8;
-    --sidebar-accent-foreground: #2b2a27;
-    --sidebar-border: #e0d9ca;
-    --sidebar-ring: #b9532f;
+
+    --sidebar: #ffffff;
+    --sidebar-foreground: #101014;
+    --sidebar-primary: #6d28d9;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #f0f0f4;
+    --sidebar-accent-foreground: #101014;
+    --sidebar-border: #e3e3e9;
+    --sidebar-ring: #7c3aed;
+
+    /*
+     * Depth & lighting (§5 of the Experience Foundation).
+     * Shadows are the *separation* layer; glows are the *lighting* layer.
+     * Both are token-driven so a theme swap relights the whole product.
+     */
+    --shadow-ambient: 0 1px 2px rgb(16 16 20 / 0.06);
+    --shadow-raised: 0 2px 6px -1px rgb(16 16 20 / 0.08), 0 1px 2px rgb(16 16 20 / 0.05);
+    --shadow-overlay: 0 12px 32px -8px rgb(16 16 20 / 0.14), 0 2px 8px rgb(16 16 20 / 0.06);
+    --shadow-modal: 0 28px 64px -16px rgb(16 16 20 / 0.22), 0 4px 16px rgb(16 16 20 / 0.08);
+
+    --glow-strength: 0.16;
+    --glow-spread: 32px;
+    --sheen: rgb(16 16 20 / 0.04);
+    --scrim: rgb(250 250 251 / 0.72);
+
+    /* BKLit chart surface tokens */
+    --legend: #ffffff;
+    --legend-foreground: #101014;
+    --legend-muted: #f0f0f4;
+    --legend-muted-foreground: #56565f;
+    --legend-track: #e3e3e9;
+    --chart-background: #ffffff;
+    --chart-foreground: #101014;
+    --chart-foreground-muted: #56565f;
+    --chart-line-primary: var(--chart-1);
+    --chart-line-secondary: var(--chart-2);
+    --chart-crosshair: #b9b9c4;
+    --chart-grid: #e3e3e9;
+    --chart-brush-border: var(--chart-grid);
+    --chart-tooltip-background: rgb(16 16 20 / 0.9);
+    --chart-tooltip-foreground: #fafafb;
+    --chart-tooltip-muted: #9a9aa5;
+    --chart-marker-background: #ffffff;
+    --chart-marker-border: #e3e3e9;
+    --chart-marker-foreground: #101014;
+    --chart-label: #56565f;
+    --chart-scale-01: #ede9fe;
+    --chart-scale-02: #ddd0fd;
+    --chart-scale-03: #c3aefb;
+    --chart-scale-04: #a78bfa;
+    --chart-scale-05: #7c3aed;
+    --chart-scale-pattern-color: #f3f3f6;
 }
 
 .dark {
-    --background: #2b2a27;
-    --foreground: #f0ece0;
-    --card: #34322f;
-    --card-foreground: #f0ece0;
-    --popover: #3d3a36;
-    --popover-foreground: #f0ece0;
-    --primary: #c96442;
-    --primary-foreground: #f0ece0;
-    --secondary: #3d3a36;
-    --secondary-foreground: #f0ece0;
-    --muted: #34322f;
-    --muted-foreground: #a79f91;
-    --accent: #3d3a36;
-    --accent-foreground: #f0ece0;
-    --destructive: #c25b5b;
-    --border: #4a4640;
-    --input: #4a4640;
-    --ring: #c96442;
-    --success: #6d8e5d;
-    --success-foreground: #2b2a27;
-    --warning: #d6a249;
-    --warning-foreground: #2b2a27;
-    --info: #6b95c7;
-    --info-foreground: #2b2a27;
-    --chart-1: #c96442;
-    --chart-2: #6d8e5d;
-    --chart-3: #d6a249;
-    --chart-4: #6b95c7;
-    --chart-5: #a79f91;
-    --sidebar: #34322f;
-    --sidebar-foreground: #f0ece0;
-    --sidebar-primary: #c96442;
-    --sidebar-primary-foreground: #f0ece0;
-    --sidebar-accent: #3d3a36;
-    --sidebar-accent-foreground: #f0ece0;
-    --sidebar-border: #4a4640;
-    --sidebar-ring: #c96442;
+    /* Surfaces — the elevation ladder. Depth reads as *lighter*, then shadow. */
+    --background: #050506;
+    --foreground: #f2f2f5;
+    --card: #0c0c0e;
+    --card-foreground: #f2f2f5;
+    --elevated: #141417;
+    --elevated-foreground: #f2f2f5;
+    --popover: #141417;
+    --popover-foreground: #f2f2f5;
+    --secondary: #141417;
+    --secondary-foreground: #f2f2f5;
+    --muted: #0c0c0e;
+    --muted-foreground: #9a9aa5;
+    --accent: #1c1c21;
+    --accent-foreground: #f2f2f5;
+    --border: #232328;
+    --input: #6e6e7a;
+
+    /* Accents */
+    --brand: #8b5cf6;
+    --primary: #7c3aed;
+    --primary-foreground: #ffffff;
+    --ring: #8b5cf6;
+    --reward: #ff7a1a;
+    --reward-foreground: #1a0c00;
+    --success: #3b9eff;
+    --success-foreground: #04101f;
+    --warning: #ffc53d;
+    --warning-foreground: #1f1600;
+    --destructive: #f26d6d;
+    --info: #a78bfa;
+    --info-foreground: #100526;
+
+    --chart-1: #8b5cf6;
+    --chart-2: #ff7a1a;
+    --chart-3: #3b9eff;
+    --chart-4: #ffc53d;
+    --chart-5: #f26d6d;
+
+    --sidebar: #0c0c0e;
+    --sidebar-foreground: #f2f2f5;
+    --sidebar-primary: #7c3aed;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #1c1c21;
+    --sidebar-accent-foreground: #f2f2f5;
+    --sidebar-border: #232328;
+    --sidebar-ring: #8b5cf6;
+
+    /*
+     * On a true black canvas a drop shadow is nearly invisible, so the dark
+     * ladder leans on surface-lightening plus a hairline top sheen for the
+     * "lit from above" read, with shadow only doing overlay separation.
+     */
+    --shadow-ambient: 0 1px 0 0 rgb(255 255 255 / 0.03);
+    --shadow-raised: 0 1px 0 0 rgb(255 255 255 / 0.04), 0 4px 12px -4px rgb(0 0 0 / 0.7);
+    --shadow-overlay: 0 1px 0 0 rgb(255 255 255 / 0.05), 0 16px 40px -12px rgb(0 0 0 / 0.85);
+    --shadow-modal: 0 1px 0 0 rgb(255 255 255 / 0.06), 0 32px 72px -20px rgb(0 0 0 / 0.95);
+
+    --glow-strength: 0.3;
+    --glow-spread: 40px;
+    --sheen: rgb(255 255 255 / 0.05);
+    --scrim: rgb(5 5 6 / 0.76);
+
+    /* BKLit chart surface tokens */
+    --legend: #0c0c0e;
+    --legend-foreground: #f2f2f5;
+    --legend-muted: #141417;
+    --legend-muted-foreground: #9a9aa5;
+    --legend-track: #232328;
+    --chart-background: #050506;
+    --chart-foreground: #9a9aa5;
+    --chart-foreground-muted: #6e6e7a;
+    --chart-crosshair: #6e6e7a;
+    --chart-grid: #1c1c21;
+    --chart-brush-border: var(--chart-grid);
+    --chart-tooltip-background: rgb(20 20 23 / 0.92);
+    --chart-tooltip-foreground: #f2f2f5;
+    --chart-tooltip-muted: #9a9aa5;
+    --chart-marker-background: #141417;
+    --chart-marker-border: #232328;
+    --chart-marker-foreground: #f2f2f5;
+    --chart-label: #9a9aa5;
+    --chart-scale-01: #241a3d;
+    --chart-scale-02: #35275c;
+    --chart-scale-03: #4c3585;
+    --chart-scale-04: #6d47c2;
+    --chart-scale-05: #8b5cf6;
+    --chart-scale-pattern-color: #0c0c0e;
+}
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * MOTION TOKENS
+ * ─────────────────────────────────────────────────────────────────────────────
+ * CSS mirror of `src/lib/motion/tokens.ts`, which is the source of truth for
+ * JavaScript-driven motion (Anime.js / Motion). These exist so CSS-only
+ * transitions land on the exact same tiers as scripted animation — one product,
+ * one rhythm. Keep the two files in sync; the TS file documents each tier.
+ */
+:root {
+    --motion-fast: 140ms;
+    --motion-base: 220ms;
+    --motion-slow: 340ms;
+    --motion-celebrate: 560ms;
+
+    --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
+    --ease-move: cubic-bezier(0.65, 0, 0.35, 1);
+
+    /* Layering scale — see Z_LAYER in src/lib/motion/tokens.ts */
+    --z-base: 0;
+    --z-raised: 10;
+    --z-sticky: 20;
+    --z-overlay: 30;
+    --z-modal: 40;
+    --z-toast: 50;
+    --z-cursor: 60;
+
+    /*
+     * Live pointer coordinates, published by the cursor engine
+     * (src/lib/motion/pointer.ts) onto whichever element opts in. Effects read
+     * these instead of re-subscribing, so one rAF loop lights the whole page.
+     */
+    --pointer-x: 50%;
+    --pointer-y: 50%;
+    --pointer-opacity: 0;
 }
 
 @layer base {
@@ -157,9 +352,142 @@
 }
 
 /*
- * Global reduced-motion guarantee (InteractionPrinciples §2, §12).
- * When the user prefers reduced motion, neutralize all animation/transition
- * so meaning is conveyed by state, color, and text alone — never by movement.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * DEPTH & LIGHTING UTILITIES
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Reusable primitives that give the product physical depth. Every one is
+ * transform/opacity- or shadow-based (compositor friendly) and token-driven, so
+ * they relight automatically on a theme swap. Components compose these classes
+ * rather than hand-rolling shadows.
+ */
+@layer components {
+  .depth-flat {
+    box-shadow: none;
+  }
+  .depth-ambient {
+    box-shadow: var(--shadow-ambient);
+  }
+  .depth-raised {
+    box-shadow: var(--shadow-raised);
+  }
+  .depth-overlay {
+    box-shadow: var(--shadow-overlay);
+  }
+  .depth-modal {
+    box-shadow: var(--shadow-modal);
+  }
+
+  /*
+   * Hover elevation. The lift is a transform (never a layout property) so it
+   * stays on the compositor; the surface also lightens, which is the primary
+   * depth cue on a black canvas.
+   */
+  .depth-interactive {
+    transition:
+      box-shadow var(--motion-fast) var(--ease-move),
+      transform var(--motion-fast) var(--ease-move),
+      background-color var(--motion-fast) var(--ease-move);
+    will-change: transform;
+  }
+  .depth-interactive:hover {
+    box-shadow: var(--shadow-overlay);
+    transform: translate3d(0, -2px, 0);
+  }
+  .depth-interactive:active {
+    transform: translate3d(0, 0, 0);
+    box-shadow: var(--shadow-ambient);
+  }
+
+  /*
+   * Glow. `--glow-color` defaults to the brand hue; set it per-instance to
+   * relight for reward (orange), success (blue), warning (yellow), etc.
+   */
+  .glow {
+    --glow-color: var(--brand);
+    box-shadow: 0 0 var(--glow-spread) calc(var(--glow-spread) / -4)
+      color-mix(in oklab, var(--glow-color) calc(var(--glow-strength) * 100%), transparent);
+  }
+  .glow-soft {
+    --glow-color: var(--brand);
+    box-shadow: 0 0 calc(var(--glow-spread) * 0.6) calc(var(--glow-spread) / -5)
+      color-mix(in oklab, var(--glow-color) calc(var(--glow-strength) * 60%), transparent);
+  }
+  .glow-strong {
+    --glow-color: var(--brand);
+    box-shadow:
+      0 0 calc(var(--glow-spread) * 1.6) calc(var(--glow-spread) / -3)
+        color-mix(in oklab, var(--glow-color) calc(var(--glow-strength) * 140%), transparent),
+      0 0 0 1px color-mix(in oklab, var(--glow-color) 24%, transparent);
+  }
+
+  /* A hairline of light along the top edge — the "lit from above" read. */
+  .sheen-top {
+    position: relative;
+  }
+  .sheen-top::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--sheen) 24%, var(--sheen) 76%, transparent);
+    pointer-events: none;
+  }
+
+  /*
+   * Glass. Restrained by design — a low-saturation blur over an already dark
+   * surface, so text contrast is preserved (DesignSystem §10).
+   */
+  .glass {
+    background-color: color-mix(in oklab, var(--elevated) 72%, transparent);
+    backdrop-filter: blur(16px) saturate(120%);
+    border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  }
+
+  /*
+   * Cursor-aware spotlight. Reads the pointer variables published by the
+   * cursor engine; no JS re-render is involved, only CSS custom properties.
+   */
+  .spotlight {
+    --spotlight-color: var(--brand);
+    --spotlight-size: 380px;
+    position: relative;
+    isolation: isolate;
+  }
+  .spotlight::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    opacity: var(--pointer-opacity);
+    transition: opacity var(--motion-base) var(--ease-move);
+    background: radial-gradient(
+      var(--spotlight-size) circle at var(--pointer-x) var(--pointer-y),
+      color-mix(in oklab, var(--spotlight-color) calc(var(--glow-strength) * 100%), transparent),
+      transparent 70%
+    );
+    pointer-events: none;
+  }
+
+  /* Depth gradient that fades content into the canvas at a section edge. */
+  .fade-to-canvas {
+    -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent);
+    mask-image: linear-gradient(to bottom, #000 60%, transparent);
+  }
+}
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * REDUCED MOTION
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Global CSS guarantee (InteractionPrinciples §2, §12): declarative animation
+ * and transitions are neutralized, and every ambient/cursor effect is switched
+ * off so nothing tracks, drifts or pulses.
+ *
+ * This handles CSS only. Scripted motion (Anime.js / Motion) cannot be stopped
+ * by a media query, so the motion system gates it in JS — see
+ * `src/lib/motion/reduced-motion.ts`, which every engine and primitive routes
+ * through. The two layers together are what makes the guarantee complete.
  */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -169,5 +497,14 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .depth-interactive:hover,
+  .depth-interactive:active {
+    transform: none;
+  }
+
+  .spotlight::after {
+    display: none;
   }
 }

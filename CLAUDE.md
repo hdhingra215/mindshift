@@ -2,6 +2,12 @@
 
 This document is the permanent source of truth for how MindShift is built. Claude Code must follow it throughout development. When a request conflicts with this document, surface the conflict before proceeding.
 
+> ## ▶ Start every session by reading [docs/project/ProjectStatus.md](docs/project/ProjectStatus.md)
+>
+> It is the handoff document: completed phases, current architecture, what is implemented versus stubbed, technical debt, open decisions, the exact next phase, and the settled implementation decisions that must not be violated.
+>
+> Read it before planning or writing any code — including when the request looks small. Update it whenever a phase completes or its contents go stale.
+
 ---
 
 ## 1. Project Overview
@@ -37,11 +43,12 @@ This document is the permanent source of truth for how MindShift is built. Claud
 | Styling | Tailwind CSS v4 |
 | Components | shadcn/ui |
 | Routing | TanStack Router (file-based) |
-| Animation | Framer Motion + GSAP |
+| Animation | Anime.js (primary engine) + Motion (scroll / viewport / gestures) |
+| UI add-ons | KokonutUI · BKLit Charts |
 | Backend | Supabase — Auth, PostgreSQL, Storage, Row Level Security |
 | Hosting | Vercel |
 
-Do not add technologies outside this stack without explicit approval.
+Do not add technologies outside this stack without explicit approval. No additional animation or UI-component library may be introduced — the boundary between the two animation engines is defined in [docs/architecture/MotionSystem.md](docs/architecture/MotionSystem.md) §1.
 
 ---
 

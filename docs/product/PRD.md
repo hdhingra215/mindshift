@@ -234,7 +234,7 @@ Loop is short, satisfying, and repeatable; difficulty adapts as mastery grows.
 
 ## Technical Constraints
 
-- Stack fixed: React 19, Vite, TypeScript, Tailwind v4, shadcn/ui, TanStack Router, Framer Motion, GSAP, Supabase (Auth/Postgres/Storage/RLS), Vercel.
+- Stack fixed: React 19, Vite, TypeScript, Tailwind v4, shadcn/ui, TanStack Router, Anime.js + Motion, KokonutUI, BKLit Charts, Supabase (Auth/Postgres/Storage/RLS), Vercel.
 - AI provider calls run server-side (edge functions); no keys in client.
 - Supabase RLS mandatory on all tables; schema via migrations.
 - Mobile-first, accessible, performant per the project constitution.

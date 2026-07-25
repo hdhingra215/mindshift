@@ -1,10 +1,12 @@
 # MindShift — Design System Specification
 
-**Status:** Draft v1 · **Owner:** Design · **Last updated:** 2026-07-21
+**Status:** Draft v2 · **Owner:** Design · **Last updated:** 2026-07-25
 
 Translates the approved [Brand Guidelines](BrandGuidelines.md) into a production-ready design-system spec. This is the **source of truth** the design tokens will be built from next. No CSS, no TypeScript, no implementation here — specification only.
 
-Dark theme is the **default and primary** experience. Light theme is planned (see §11). The palette below is warm, calm, and premium — a terracotta accent on warm charcoal neutrals — matching the brand's intelligent, approachable, adult tone.
+Dark theme is the **default and primary** experience. Light theme is planned (see §11). The palette is a **true deep black canvas with a five-accent expressive set** — premium, cinematic, and unmistakably a game rather than a dashboard. Depth is built from layered surfaces, light and shadow rather than from hue variety.
+
+> **v2 change.** v1 specified warm charcoal neutrals with a single terracotta accent. That palette is retired. The neutral base moved to true deep black and the accent set widened to five, each owning exactly one semantic role. The discipline is unchanged: a wider palette is only allowed because every colour means something. See §1 "Accent discipline".
 
 ---
 
@@ -12,41 +14,46 @@ Dark theme is the **default and primary** experience. Light theme is planned (se
 
 The official color foundation. All values are fixed brand colors; do not introduce new raw colors — extend only through semantic tokens (§2).
 
-### Brand & accent
-| Role | Hex | Notes |
+### Brand & accents
+
+Each accent owns exactly one job. This is what makes a five-colour palette disciplined rather than decorative.
+
+| Role | Hex | Owns |
 |---|---|---|
-| Primary Accent | `#C96442` | Terracotta. Primary actions, focus, brand moments. Use with restraint for punch. |
+| Brand / Purple | `#8B5CF6` | Brand identity, focus rings, glow, graphics. The luminous hue. |
+| Primary (fill) | `#7C3AED` | Primary action **fills**. A step deeper than Brand so white label text clears AA (≈5.4:1). |
+| Reward / Orange | `#FF7A1A` | XP, rewards, energy, progress. |
+| Warning / Yellow | `#FFC53D` | Caution, streak at risk, non-blocking alerts. |
+| Success / Blue | `#3B9EFF` | Correct catches, mastery, positive outcomes. |
+| Error / Soft Red | `#F26D6D` | Errors, destructive actions, failed states. Gentle, not alarming. |
+| Info / Violet | `#A78BFA` | Neutral info, tips, AI coaching notes. |
+
+**Why blue for success.** Blue-versus-red is the most colour-blind-distinguishable success/error pair available inside this palette; a warm success (orange) would sit too close to the soft red under deuteranopia. Colour is never the sole signal regardless (§10), but the default pairing should be the safe one.
 
 ### Neutrals — surfaces (dark, default)
 | Role | Hex | Notes |
 |---|---|---|
-| Background | `#2B2A27` | App base / page canvas. |
-| Surface | `#34322F` | Cards, panels, default raised content. |
-| Elevated Surface | `#3D3A36` | Modals, popovers, menus — content above surface. |
-| Border | `#4A4640` | Dividers, outlines, input borders. |
+| Background | `#050506` | App base / page canvas. True deep black. |
+| Surface | `#0C0C0E` | Cards, panels, default raised content. |
+| Elevated Surface | `#141417` | Modals, popovers, menus — content above surface. |
+| Hover Surface | `#1C1C21` | Accent/hover state layer. |
+| Border | `#232328` | Dividers, outlines — decorative separation. |
+| Input Border | `#6E6E7A` | Form control boundaries. Lighter than Border to clear the 3:1 graphical-boundary bar (§10). |
 
 ### Text
 | Role | Hex | Notes |
 |---|---|---|
-| Primary Text | `#F0ECE0` | Headings, body, high-emphasis. |
-| Secondary Text | `#CFC9BC` | Supporting text, labels, medium emphasis. |
-| Muted Text | `#A79F91` | Hints, placeholders, disabled, captions. |
+| Primary Text | `#F2F2F5` | Headings, body, high-emphasis. |
+| Muted Text | `#9A9AA5` | Hints, placeholders, disabled, captions. |
 
-### Semantic status
-| Role | Hex | Notes |
-|---|---|---|
-| Success | `#6D8E5D` | Correct answers, positive outcomes, confirmations. Muted sage — encouraging, not loud. |
-| Warning | `#D6A249` | Cautions, streak-at-risk, non-blocking alerts. |
-| Error | `#C25B5B` | Errors, destructive actions, failed states. Gentle, not alarming. |
-| Info | `#6B95C7` | Neutral info, tips, coaching notes. |
+**Elevation ladder (dark):** Background `#050506` → Surface `#0C0C0E` → Elevated `#141417`. Depth is expressed by getting *lighter*, plus light and shadow (§6). On a true-black canvas a drop shadow is nearly invisible — **surface-lightening and glow are the primary depth cues**, shadow does overlay separation only.
 
-**Elevation ladder (dark):** Background `#2B2A27` → Surface `#34322F` → Elevated `#3D3A36`. Depth is expressed by getting *lighter*, plus shadow (§6). Never rely on shadow alone in dark mode — surface-lightening is the primary depth cue.
-
-**Accent discipline:** the terracotta accent is the only saturated color in the core UI. Status colors appear only in their semantic context. No decorative rainbow, no random hues (per brand "avoid").
+**Accent discipline:** five accents, five roles, no overlap. An accent may only appear in its semantic context — orange means reward, yellow means caution, blue means correct, red means error, purple means brand. Never pick an accent because a screen "needs colour". No decorative rainbow, no random hues (per brand "avoid"). At most one saturated accent should dominate a given screen.
 
 **Foreground pairings** (text intended to sit on a fill):
-- On Primary Accent `#C96442` → Primary Text `#F0ECE0`.
-- On Success/Warning/Error/Info fills → use Background `#2B2A27` or Primary Text depending on which meets contrast (§10); warning is light, prefer dark foreground on it.
+- On Primary `#7C3AED` → `#FFFFFF`.
+- On Reward / Warning / Success fills → use the matching dark foreground token; these hues are luminous and need dark text.
+- On Error `#F26D6D` → dark foreground, or use it as text on the canvas.
 
 ---
 
@@ -56,29 +63,30 @@ Components consume **semantic tokens**, never raw hex. Raw colors map to intent-
 
 | Token | Maps to (dark default) | Purpose |
 |---|---|---|
-| `background` | `#2B2A27` | App canvas. |
-| `foreground` | `#F0ECE0` | Default text on background. |
-| `surface` / `card` | `#34322F` | Card/panel background. |
-| `surface-foreground` / `card-foreground` | `#F0ECE0` | Text on surface. |
-| `popover` / `elevated` | `#3D3A36` | Menus, popovers, modals. |
-| `popover-foreground` | `#F0ECE0` | Text on elevated. |
-| `primary` | `#C96442` | Primary action fill / brand. |
-| `primary-foreground` | `#F0ECE0` | Text/icon on primary. |
-| `secondary` | `#3D3A36` | Secondary buttons/chips (neutral fill). |
-| `secondary-foreground` | `#F0ECE0` | Text on secondary. |
-| `muted` | `#34322F` | Muted backgrounds. |
-| `muted-foreground` | `#A79F91` | Muted/placeholder/disabled text. |
-| `accent` | `#C96442` | Hover/active accent surfaces (used sparingly). |
-| `accent-foreground` | `#F0ECE0` | Text on accent. |
-| `border` | `#4A4640` | Borders, dividers. |
-| `input` | `#4A4640` | Input borders. |
-| `ring` | `#C96442` | Focus ring (accent). |
-| `success` / `success-foreground` | `#6D8E5D` / `#2B2A27` | Positive semantic. |
-| `warning` / `warning-foreground` | `#D6A249` / `#2B2A27` | Caution semantic. |
-| `error` (`destructive`) / `error-foreground` | `#C25B5B` / `#F0ECE0` | Error/destructive. |
-| `info` / `info-foreground` | `#6B95C7` / `#2B2A27` | Info semantic. |
-
-**Secondary/muted text tokens:** `text-secondary` → `#CFC9BC`, `text-muted` → `#A79F91`, applied via foreground utilities, not new backgrounds.
+| `background` | `#050506` | App canvas. |
+| `foreground` | `#F2F2F5` | Default text on background. |
+| `card` | `#0C0C0E` | Card/panel background. |
+| `card-foreground` | `#F2F2F5` | Text on surface. |
+| `elevated` / `popover` | `#141417` | Menus, popovers, modals. |
+| `popover-foreground` | `#F2F2F5` | Text on elevated. |
+| `brand` | `#8B5CF6` | Brand hue for glow, rings and graphics — **non-text use**. |
+| `primary` | `#7C3AED` | Primary action fill. |
+| `primary-foreground` | `#FFFFFF` | Text/icon on primary. |
+| `secondary` | `#141417` | Secondary buttons/chips (neutral fill). |
+| `secondary-foreground` | `#F2F2F5` | Text on secondary. |
+| `muted` | `#0C0C0E` | Muted backgrounds. |
+| `muted-foreground` | `#9A9AA5` | Muted/placeholder/disabled text. |
+| `accent` | `#1C1C21` | Hover/active **surface** — neutral, so accent hues stay meaningful. |
+| `accent-foreground` | `#F2F2F5` | Text on accent. |
+| `border` | `#232328` | Borders, dividers. |
+| `input` | `#6E6E7A` | Input borders. |
+| `ring` | `#8B5CF6` | Focus ring (brand). |
+| `reward` / `reward-foreground` | `#FF7A1A` / `#1A0C00` | XP, rewards, progress. |
+| `success` / `success-foreground` | `#3B9EFF` / `#04101F` | Correct catches, mastery. |
+| `warning` / `warning-foreground` | `#FFC53D` / `#1F1600` | Caution semantic. |
+| `destructive` | `#F26D6D` | Error/destructive. |
+| `info` / `info-foreground` | `#A78BFA` / `#100526` | Info, tips, AI coaching. |
+| `chart-1` … `chart-5` | purple · orange · blue · yellow · red | Data visualization series. |
 
 **Rules:**
 - Components reference tokens only. A component must never contain a raw hex value.
@@ -163,37 +171,51 @@ Rounded, approachable, modern — not sharp, not fully pill everywhere. Base rad
 
 ---
 
-## 6. Shadow System
+## 6. Depth, Shadow & Lighting System
 
-Dark UI leans on **surface lightening first, shadow second**. Shadows are soft, low-opacity, warm-neutral (never pure black harsh drop shadows). Purpose: separate elevated layers and signal interactivity.
+On a true-black canvas, **light is the primary depth cue** and shadow is the secondary one — a drop shadow against `#050506` is essentially invisible. Depth is therefore built from three stacked cues: a lighter surface, a hairline top sheen, and glow.
 
+### Shadow ladder
 | Token | Elevation | Use |
 |---|---|---|
-| `shadow-none` | 0 | Flush elements, flat sections |
-| `shadow-sm` | 1 | Subtle raise — hover on cards, inputs |
-| `shadow-md` | 2 | Cards, dropdown triggers |
-| `shadow-lg` | 3 | Popovers, menus, sheets |
-| `shadow-xl` | 4 | Modals/dialogs |
-| `shadow-focus` | — | Accent focus ring (see accessibility) |
+| `depth-flat` | 0 | Flush elements, flat sections |
+| `depth-ambient` | 1 | Resting cards, inputs |
+| `depth-raised` | 2 | Cards, dropdown triggers |
+| `depth-overlay` | 3 | Popovers, menus, sheets |
+| `depth-modal` | 4 | Modals/dialogs |
+| `depth-interactive` | — | Hover lift (transform) + surface lighten + shadow step |
+
+### Lighting ladder
+| Token | Use |
+|---|---|
+| `glow-soft` | Hover affordance on interactive surfaces |
+| `glow` | A primary action, a live state |
+| `glow-strong` | Milestone moments only |
+| `sheen-top` | Hairline of light on a top edge — the "lit from above" read |
+| `glass` | Restrained blur over an already-dark surface |
+| `spotlight` | Cursor-aware radial light on a panel |
+
+Glow colour is set per instance via `--glow-color`, drawn from the semantic tone map — the light always agrees with what the element *means* (reward glows orange, a correct catch glows blue).
 
 **Rules**
-- Combine shadow with the elevation ladder (§1) — elevated surfaces are both lighter *and* shadowed.
-- Soft, diffuse, low opacity. No neon glows, no heavy borders masquerading as shadow.
-- Reserve the largest shadows for true overlays (modal, sheet).
+- Combine light and shadow with the elevation ladder (§1) — elevated surfaces are lighter *and* lit *and* shadowed.
+- Glow is a depth cue, not decoration. A screen full of glowing elements has no focal point and destroys the "one clear focus per screen" rule.
+- Reserve `glow-strong` and the largest shadows for true milestones and overlays.
+- Hover lift is always a `transform` — never an animated layout property.
 
 ---
 
 ## 7. Motion Principles
 
-From Brand Guidelines: purposeful, smooth, quick, natural. Motion guides attention and rewards progress — never decorates. (Implemented later with Framer Motion / GSAP; principles only here.)
+From Brand Guidelines: purposeful, smooth, quick, natural. Motion guides attention and rewards progress — never decorates. Implemented with **Anime.js** (primary engine) and **Motion** (scroll, viewport, gestures) — see [MotionSystem.md](../architecture/MotionSystem.md) for the architecture and the exact token values.
 
 **Duration**
 | Token | Duration | Use |
 |---|---|---|
-| `motion-fast` | 120–150ms | Hover, small state changes, taps |
-| `motion-base` | 200–250ms | Most transitions, enter/exit |
-| `motion-slow` | 300–400ms | Larger surfaces (modals, sheets, page) |
-| `motion-celebrate` | 400–700ms | Milestone/reward moments only |
+| `motion-fast` | 140ms | Hover, small state changes, taps |
+| `motion-base` | 220ms | Most transitions, enter/exit |
+| `motion-slow` | 340ms | Larger surfaces (modals, sheets, page) |
+| `motion-celebrate` | 560ms | Milestone/reward moments only |
 
 **Easing:** standard ease-out for entrances, ease-in for exits, gentle ease-in-out for movement. Natural, never linear for UI.
 
@@ -238,11 +260,13 @@ Per brand: one consistent, line-based, approachable set. Project uses **Lucide**
 Baseline: **WCAG 2.1 AA** (brand: accessibility first).
 
 **Contrast (verified against palette)**
-- Primary Text `#F0ECE0` on Background `#2B2A27` / Surface `#34322F` / Elevated `#3D3A36` → high contrast, passes AA for body and large text.
-- Secondary Text `#CFC9BC` on dark surfaces → passes AA for normal text.
-- Muted Text `#A79F91` on dark surfaces → use for **large text, secondary, or non-essential** info; verify ≥4.5:1 for any small essential text and bump to Secondary Text if it falls short. Never use muted for critical reading content.
-- Primary Text on Primary Accent `#C96442` → intended for large text/buttons; **verify per use** and prefer larger/semibold labels on accent fills.
-- Warning `#D6A249` and Info/Success fills: pair with **dark foreground** (`#2B2A27`) for contrast; Error `#C25B5B` pairs with light foreground.
+- Primary Text `#F2F2F5` on Background `#050506` → ≈19:1. Passes AA and AAA.
+- Muted Text `#9A9AA5` on dark surfaces → ≈7:1. Passes AA for normal text; still avoid for critical reading content.
+- White on Primary `#7C3AED` → ≈5.4:1. Passes AA for normal text. **This is why `primary` is a step deeper than `brand`** — white on `#8B5CF6` is ≈4.4:1 and fails at body size.
+- Brand `#8B5CF6` on Background → ≈4.5:1 as text, ≥3:1 as a graphical boundary. Safe for focus rings, glow and non-text accents.
+- Reward `#FF7A1A` ≈7.6:1, Success `#3B9EFF` ≈7.0:1, Warning `#FFC53D` ≈12.9:1, Error `#F26D6D` ≈7.0:1 on Background — all pass AA as text.
+- Reward / Warning / Success **fills** pair with the matching dark foreground token; all four hues are too luminous for white text.
+- Border `#232328` is a decorative separator only. Any **essential** UI boundary (form controls) uses Input `#6E6E7A`, which clears the 3:1 graphical bar against Surface.
 - **All essential text must meet ≥4.5:1 (normal) / ≥3:1 (large).** UI component/graphical boundaries ≥3:1.
 
 **Rules**
@@ -260,8 +284,9 @@ Baseline: **WCAG 2.1 AA** (brand: accessibility first).
 Dark is default and shipped first. Light theme is planned and the token architecture must support it from day one.
 
 - **Token swap only:** switching theme remaps the semantic tokens (§2); components never change. No component may hardcode a dark value.
-- **Inverted neutrals:** light background = warm off-white (a light counterpart to the warm charcoal), surfaces slightly *darker/tinted* for elevation, text = dark warm neutral. Keep the warm, premium character — not stark clinical white.
-- **Same accent:** terracotta `#C96442` carries across both themes; verify its contrast on light surfaces (may need a slightly darker accent shade for AA on light).
+- **Inverted neutrals:** light background = near-white (`#FAFAFB`), surfaces slightly *lighter/tinted* for elevation, text = near-black neutral.
+- **Same accent hues, darker shades:** each of the five accents has a light-theme counterpart deep enough to clear AA on a light surface (e.g. purple `#6D28D9`, orange `#C2410C`, blue `#1D6FD0`). Semantics are identical; only luminance changes.
+- **Glow inverts to shadow:** light mode has no black canvas to emit light against, so `--glow-strength` drops and the shadow ladder does the depth work.
 - **Status colors:** retune for light-mode contrast (darker success/warning/info as needed); keep semantics identical.
 - **Elevation flips:** in light mode, depth uses shadow + subtle darkening, opposite of dark mode's lightening.
 - Theme choice: system-preference default with user override; persisted per profile.
@@ -273,20 +298,20 @@ Until light theme ships, do not scatter dark-specific values — everything rout
 ## 12. Dark Theme (default)
 
 - **Default and primary.** All screens designed dark-first.
-- Warm charcoal neutral base (`#2B2A27` → `#34322F` → `#3D3A36`) with warm off-white text — calm, premium, low-fatigue for longer sessions.
-- **Depth via lightening + soft shadow.** Higher elevation = lighter surface.
-- Terracotta accent is the single saturated brand color; status colors semantic-only.
-- Avoid pure black (`#000`) and pure white (`#fff`) — the warm neutrals define the mood.
+- **True deep black base** (`#050506` → `#0C0C0E` → `#141417`) with near-white text — cinematic, immersive, and the canvas that makes accent light read as light.
+- **Depth via lightening + glow + shadow, in that order.** Higher elevation = lighter surface; a primary action reads as raised because it *emits light*.
+- Five accents, five semantic roles (§1). Each appears only in its own context.
 - Sufficient contrast maintained per §10; muted text used only where non-essential.
+- Pure white (`#fff`) is used only as label text on a primary fill, never as a surface or body colour.
 
 ---
 
 ## 13. Design Do's and Don'ts
 
 **Do**
-- Use semantic tokens for every color, space, radius, shadow.
+- Use semantic tokens for every color, space, radius, shadow, glow.
 - Keep generous whitespace and clear hierarchy.
-- Reserve the terracotta accent for primary actions and brand moments.
+- Reserve the brand purple for primary actions and brand moments; use each other accent only in its own semantic role.
 - Pair status color with an icon/label (never color-only).
 - Design mobile-first with large tap targets and visible focus.
 - Provide loading (skeleton) and empty states.
@@ -299,6 +324,7 @@ Until light theme ships, do not scatter dark-specific values — everything rout
 - Overuse the accent or stack multiple saturated colors.
 - Rely on shadow alone for depth in dark mode, or on color alone to convey state.
 - Use muted text for essential/small reading content.
+- Use an accent hue outside its semantic role, or reach for a colour because a screen feels empty.
 - Over-animate, add gratuitous effects, or use big shadows/glows everywhere.
 - Mix icon styles, mix many radii, or use inconsistent spacing.
 - Remove focus outlines or ship without keyboard/SR support.

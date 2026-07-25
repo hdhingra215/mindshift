@@ -9,7 +9,7 @@ type LogoProps = {
 
 /**
  * MindShift wordmark. The brand concept is a "shift" in thinking — expressed
- * with a single terracotta accent on the pivot letter, no cartoon brain.
+ * with a single brand accent on the pivot letter, no cartoon brain.
  * Decorative; screen readers get the app name via the text itself.
  */
 export function Logo({ className, showMark = true }: LogoProps) {

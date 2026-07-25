@@ -1,16 +1,21 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { requireAuth } from '@/features/auth'
+import { PageSkeleton } from '@/components/layout/page-skeleton'
 
 function SettingsPage() {
   return (
-    <section className="flex min-h-dvh flex-col items-center justify-center gap-2 px-6 text-center">
-      <h1 className="font-heading text-2xl font-semibold text-foreground">Settings</h1>
-      <p className="text-sm text-muted-foreground">Preferences and data controls — coming soon.</p>
-    </section>
+    <div className="flex flex-col gap-2">
+      <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
+        Settings
+      </h1>
+      <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
+        Preferences, theme, notifications, and data controls will live here.
+        Coming in a later phase.
+      </p>
+    </div>
   )
 }
 
 export const Route = createFileRoute('/(app)/settings')({
-  beforeLoad: ({ context, location }) => requireAuth(context.auth, location.href),
+  pendingComponent: PageSkeleton,
   component: SettingsPage,
 })
