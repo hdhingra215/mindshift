@@ -1,3 +1,4 @@
+import type { AchievementUnlock } from '@/features/achievements'
 import type { MasteryAward } from '@/features/mastery'
 
 /**
@@ -135,6 +136,11 @@ export type XpAward = {
    * still land if mastery does not.
    */
   mastery: readonly MasteryAward[]
+  /**
+   * Achievements this award unlocked, smallest reward first so the biggest
+   * moment lands last. Empty on almost every attempt — that is the point.
+   */
+  achievements: readonly AchievementUnlock[]
 }
 
 export type ReflectionInput = {

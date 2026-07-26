@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { AchievementToast } from '@/features/achievements'
 import { MasteryReveal } from '@/features/mastery'
 import { useGameSession } from '../hooks/use-game-session'
 import { GAME_FINISHING_MESSAGES, GAME_LOADING_MESSAGES } from '../constants'
@@ -15,8 +16,17 @@ import { XpReward } from './xp-reward'
  * presentation switch.
  */
 export function GameScreen() {
-  const { state, select, submit, saveReflection, next, finish, retry } =
+  const { state, select, submit, saveReflection, next, finish, retry, dismissAchievement } =
     useGameSession()
+
+  /*
+   * The unlock reveal is mounted outside the phase switch, so it survives the
+   * move to the next scenario and to the summary. An achievement earned on the
+   * last question of a session should not vanish because the screen changed.
+   */
+  const achievementToast = (
+    <AchievementToast onDismiss={dismissAchievement} queue={state.pendingAchievements} />
+  )
 
   switch (state.phase) {
     case 'initializing':
@@ -39,26 +49,33 @@ export function GameScreen() {
 
     case 'summary':
       return (
-        <SessionSummary
-          completedCount={state.completedCount}
-          onPlayAgain={retry}
-          sessionXp={state.sessionXp}
-        />
+        <>
+          <SessionSummary
+            achievements={state.sessionAchievements}
+            completedCount={state.completedCount}
+            onPlayAgain={retry}
+            sessionXp={state.sessionXp}
+          />
+          {achievementToast}
+        </>
       )
 
     case 'deciding':
     case 'submitting':
       if (!state.scenario) return <GameLoading messages={GAME_LOADING_MESSAGES} />
       return (
-        <ScenarioPlay
-          scenario={state.scenario}
-          selectedChoiceId={state.selectedChoiceId}
-          submitting={state.phase === 'submitting'}
-          completedCount={state.completedCount}
-          onSelect={select}
-          onSubmit={() => void submit()}
-          sessionXp={state.sessionXp}
-        />
+        <>
+          <ScenarioPlay
+            scenario={state.scenario}
+            selectedChoiceId={state.selectedChoiceId}
+            submitting={state.phase === 'submitting'}
+            completedCount={state.completedCount}
+            onSelect={select}
+            onSubmit={() => void submit()}
+            sessionXp={state.sessionXp}
+          />
+          {achievementToast}
+        </>
       )
 
     case 'revealed':
@@ -92,6 +109,7 @@ export function GameScreen() {
               Next scenario
             </Button>
           </div>
+          {achievementToast}
         </div>
       )
 

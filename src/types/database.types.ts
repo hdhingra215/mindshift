@@ -986,6 +986,38 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      achievement_active_days: {
+        Args: { p_player_id: string; p_window_days: number }
+        Returns: number
+      }
+      achievement_calibrated_outcomes: {
+        Args: { p_max_gap: number; p_player_id: string }
+        Returns: number
+      }
+      achievement_criteria_met: {
+        Args: { p_criteria: Json; p_facts: Json; p_player_id: string }
+        Returns: boolean
+      }
+      achievement_day_streak: {
+        Args: { p_allow_grace: boolean; p_player_id: string }
+        Returns: number
+      }
+      achievement_difficulty_clears: {
+        Args: {
+          p_difficulty: Database["public"]["Enums"]["difficulty_level"]
+          p_player_id: string
+        }
+        Returns: number
+      }
+      achievement_facts: { Args: { p_player_id: string }; Returns: Json }
+      achievement_recovery_run: {
+        Args: {
+          p_correct_after: number
+          p_misses_before: number
+          p_player_id: string
+        }
+        Returns: boolean
+      }
       award_attempt_xp: { Args: { p_attempt_id: string }; Returns: Json }
       award_reflection_xp: { Args: { p_attempt_id: string }; Returns: Json }
       bias_mastery_ceiling: {
@@ -1002,6 +1034,7 @@ export type Database = {
         }
         Returns: number
       }
+      evaluate_achievements: { Args: { p_player_id: string }; Returns: Json }
       level_for_total_xp: {
         Args: { p_total_xp: number }
         Returns: {
@@ -1011,6 +1044,7 @@ export type Database = {
           level_title: string
         }[]
       }
+      mastery_tier_floor: { Args: { p_tier: string }; Returns: number }
       progression_snapshot: {
         Args: {
           p_awarded: number

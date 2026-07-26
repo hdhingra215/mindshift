@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { achievementUnlockSchema } from '@/features/achievements'
 import { masteryAwardSchema } from '@/features/mastery'
 import { supabase } from '@/lib/supabase/client'
 import type { XpAward } from '../types'
@@ -48,10 +49,11 @@ const xpAwardSchema = z
     previous_level: z.coerce.number().int(),
     session_xp: z.coerce.number(),
     scenarios_completed: z.coerce.number().int(),
-    // Absent on any award recorded before the mastery engine shipped, and on a
-    // deployment where 7.2 has not been applied yet. Progression must not fail
-    // because the newest half of the payload is missing.
+    // Both absent on a deployment where 7.2 / 7.3 have not been applied yet.
+    // Progression must not fail because the newest part of the payload is
+    // missing — XP still has to land.
     mastery: z.array(masteryAwardSchema).nullish(),
+    achievements: z.array(achievementUnlockSchema).nullish(),
   })
   .transform(
     (row): XpAward => ({
@@ -67,6 +69,7 @@ const xpAwardSchema = z
       sessionXp: row.session_xp,
       scenariosCompleted: row.scenarios_completed,
       mastery: row.mastery ?? [],
+      achievements: row.achievements ?? [],
     }),
   )
 

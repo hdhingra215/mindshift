@@ -1,16 +1,20 @@
 import { Link } from '@tanstack/react-router'
 import { Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { AchievementHistory, type AchievementUnlock } from '@/features/achievements'
 
 type SessionSummaryProps = {
   completedCount: number
   /** XP the session earned, as the server recorded it. */
   sessionXp: number
+  /** Achievements unlocked this sitting — reviewable calmly, after the fact. */
+  achievements: readonly AchievementUnlock[]
   onPlayAgain: () => void
 }
 
 /** Calm, elegant end-of-session moment — reps framed as growth, no confetti. */
 export function SessionSummary({
+  achievements,
   completedCount,
   sessionXp,
   onPlayAgain,
@@ -43,6 +47,8 @@ export function SessionSummary({
           earned this session
         </p>
       ) : null}
+
+      <AchievementHistory achievements={achievements} className="text-left" />
 
       <div className="flex w-full flex-col-reverse gap-3 sm:w-auto sm:flex-row">
         {played ? (

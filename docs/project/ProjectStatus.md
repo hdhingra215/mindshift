@@ -2,7 +2,7 @@
 
 **Read this first.** This is the handoff document for every session. It records what exists, what does not, and what must not be changed. It is implementation state, not narrative.
 
-**Last updated:** 2026-07-26 · **After:** Phase 7.2 (Bias Mastery Engine)
+**Last updated:** 2026-07-26 · **After:** Phase 7.3 (Achievement Engine)
 
 ---
 
@@ -40,6 +40,7 @@ Read in this order:
 | 7.1 | Server-authoritative XP engine — ledger, progress, session rollups, reward UI | **Uncommitted** |
 | 7.1b | Scenario load fix — PostgREST one-to-one embed, validated mapper, failure classes | **Uncommitted** |
 | 7.2 | Bias mastery engine — derived mastery, tier ladder, reveal meter | **Uncommitted** |
+| 7.3 | Achievement engine — criteria evaluator, unlock reveal, session history | **Uncommitted** |
 
 The 6.2A–D work landed in `688acf7 feat: complete gameplay vertical slice and landing experience`. 6.2E and 7.1 are currently in the working tree.
 
@@ -64,6 +65,7 @@ src/
     auth/         complete
     game/         core loop + XP awarding
     mastery/      tier ladder, helpers, meter — no calculation  ← barrel
+    achievements/ card, unlock reveal, history — no criteria     ← barrel
     marketing/    landing page
     dashboard/    types + barrel only — no implementation
     profile/      types + barrel only — no implementation
@@ -73,7 +75,7 @@ src/
     utils/        cn()
   routes/         TanStack file-based routing
   styles/globals.css   all design tokens + depth/lighting utilities
-supabase/migrations/   15 migrations — schema + seed + XP engine + mastery engine
+supabase/migrations/   16 migrations — schema + seed + XP + mastery + achievements
 supabase/functions/    EMPTY — no edge functions yet
 ```
 
@@ -85,7 +87,7 @@ supabase/functions/    EMPTY — no edge functions yet
 
 ## 3. Database status
 
-**Complete.** 15 migrations, 20 tables, all with RLS enabled (26 policies in `20260722000004_phase4_rls_policies.sql`). The two newest migrations add progression **functions** only (§4.1, §4.3) — no table or policy has changed since Phase 4.
+**Complete.** 16 migrations, 20 tables, all with RLS enabled (26 policies in `20260722000004_phase4_rls_policies.sql`). The three newest migrations add progression **functions** only (§4.1, §4.3, §4.4) — no table or policy has changed since Phase 4.
 
 **Generated types are wired in.** `src/types/database.types.ts` is produced by `npx supabase gen types typescript --linked` and the browser client is `SupabaseClient<Database>`. **Regenerate after every migration** or the client's view of the schema silently goes stale.
 
@@ -93,7 +95,7 @@ supabase/functions/    EMPTY — no edge functions yet
 
 **Seeded content:** 6 categories · 12 biases · 10 levels · 14 achievements · 6 scenario packs · **72 scenarios** (12 per pack) with 216 choices and outcomes, and 96 scenario→bias links. Every bias is taught by at least two scenarios — which is what makes the mastery ceiling (§4.3) reachable for all twelve. *(An earlier revision of this file said 30; that was wrong.)*
 
-**DB functions:** `public.set_updated_at`, the seven XP-engine functions (§4.1) and the four mastery functions (§4.3). There are still **no triggers or RPCs for mastery, streaks or achievements** — those plug into the XP engine (see Section E of its migration) rather than arriving as a parallel system.
+**DB functions:** `public.set_updated_at`, the seven XP-engine functions (§4.1), the four mastery functions (§4.3) and the nine achievement functions (§4.4). There are still **no triggers or RPCs for mastery, streaks or achievements** — those plug into the XP engine (see Section E of its migration) rather than arriving as a parallel system.
 
 **Not done:** no generated TypeScript types from the schema (the client hand-maps snake_case rows to camelCase domain types in `api/` layers). No local Supabase workflow documented. No migration has been verified against a live remote project in-session.
 
@@ -159,9 +161,30 @@ XP measures activity; mastery measures learning. They are separate systems and m
 
 `award_attempt_xp` and `award_reflection_xp` were replaced (not supplemented) to add the mastery step. Pipeline: attempt → XP ledger → progress → **mastery** → session rollup → snapshot. The payload gained a `mastery` array; nothing else changed.
 
+### 4.4 Achievement engine (Phase 7.3)
+
+`supabase/migrations/20260726000003_phase7_3_achievements.sql`. Functions only.
+
+**No achievement is defined in code.** All fourteen were seeded in Phase 5B with a `criteria` JSONB rule DSL; this migration implements an evaluator for the thirteen rule types they use. Adding an achievement is a seed row, not a deploy.
+
+| Function | Role |
+|---|---|
+| `mastery_tier_floor(text)` | Mastery tier boundaries in SQL. ⚠ **Mirrors `MASTERY_TIERS`** in `src/features/mastery/constants.ts` — change both together. |
+| `achievement_facts(uuid)` | One jsonb snapshot of the parameter-free learning facts. Computed once per evaluation. |
+| `achievement_criteria_met(...)` | The only place the DSL is interpreted. Coalesces to **false**, so malformed criteria fail closed. |
+| `achievement_difficulty_clears` · `achievement_active_days` · `achievement_day_streak` · `achievement_calibrated_outcomes` · `achievement_recovery_run` | One parameterised question each. |
+| `evaluate_achievements(uuid)` | Unlocks everything newly earned; awards XP through `record_xp`. |
+
+**Idempotency and anti-cheat.** Criteria are derived from history, so re-evaluation on unchanged history unlocks nothing. Double-unlock is impossible at two layers: the `player_achievements` unique constraint, and `on conflict do nothing … returning` which is also how "newly unlocked" is detected — so XP is granted exactly once even under a concurrent double-submit. `player_achievements` has no client write policy.
+
+Pipeline: attempt → XP → progress → mastery → **achievements** → progress (refreshed again, since an unlock may have added XP) → session rollup → snapshot. Evaluated on both award paths, because writing a reflection can itself be the earning act.
+
+⚠ `achievement_day_streak` is the **only** definition of a day streak in the product. When streaks land (7.4), `advance_streak` must call it rather than compute its own.
+
 **Not implemented — this is the gap:**
+- **Streaks.** The `streaks` table is still never written. Two seeded achievements read streak-like facts from attempt history directly; the streak *system* does not exist.
 - **Mastery decay.** `decays_at` is populated; nothing reads it. Because mastery is derived, decay must be a term in the formula, not a subtraction from the stored value — see Section E of the migration.
-- **No streaks, no achievements, no statistics.** Tables exist; nothing writes them. Section E of the migration records exactly where each one plugs into `award_attempt_xp`.
+- **No statistics.** The `statistics` table exists; nothing writes it. Section E of the migration records exactly where each one plugs into `award_attempt_xp`.
 - **No adaptive difficulty.** `fetchNextScenario` orders by `difficulty` then `slug` — a deterministic ramp, identical for every player, ignoring mastery. GameDesign §7 requires mastery-gated adaptation.
 - **No spaced repetition.** Scenarios are excluded only within the current session; nothing resurfaces a weak bias.
 - **No AI explanations.** `supabase/functions/` is empty. Only authored explanations exist. PRD requires a graceful fallback to authored copy — right now the fallback *is* the whole feature, which is acceptable for MVP but must be a conscious decision, not an oversight.
@@ -175,7 +198,7 @@ XP measures activity; mastery measures learning. They are separate systems and m
 | Landing page (`/`) | **Complete** — Phase 6.2D, refined 6.2E. Four chapters, playable framing-effect teaser, cursor lens, blind-spot constellation. The hero states the product plainly (`HERO_LEAD` / `HERO_SUPPORT` in `features/marketing/constants.ts`) above the lens demonstration; chapter markers and the loop rail are lit by the accent that owns each beat's meaning. |
 | Auth screens | **Complete** — login, signup, forgot password, reset password, verify email. |
 | Authenticated shell | **Complete** — responsive sidebar/bottom nav, top bar, user menu, skip link, page skeleton, page error, page transition. |
-| `/play` | **Functional** — full loop UI, the mastery meter (`features/mastery`) and the XP reward strip. Mastery renders above XP on the reveal, because it is the metric the player is there for. Achievement surfaces still to come. |
+| `/play` | **Functional** — full loop UI, mastery meter, XP strip, and the achievement unlock reveal (corner, non-modal, queued) plus a session-end achievement history. |
 | `/dashboard` | **Placeholder** — greeting + "Start playing" button. No progress, no stats, no next-action logic. |
 | `/profile` | **Placeholder** — avatar, name, email, "coming in a later phase". |
 | `/settings` | **Placeholder** — text only. No preferences, no theme control, no data controls. |
@@ -221,15 +244,17 @@ Reduced motion is enforced in two layers — CSS for declarative animation, `lib
 
 Ordered by how much it will cost to leave.
 
-1. **Zero tests.** `tests/unit`, `tests/integration`, `tests/e2e` contain only `.gitkeep`. No test runner is installed. Note that the XP math is deliberately *not* in TypeScript — it lives in SQL, so covering it needs a database harness (pgTAP or a Vitest integration suite against a local Supabase), not a unit test. CLAUDE.md mandates testing XP calculation, progress tracking, achievement logic, scenario evaluation, auth and DB policies — none of which are covered. Progression and mastery logic now exist untested. The mastery formula in particular has properties worth asserting (bounded, monotonic, order-independent); close this before achievements read mastery as input.
-2. **PostgREST embed cardinality is an invisible schema coupling.** Adding or dropping a UNIQUE constraint on a foreign key silently changes an embed between an object and an array. `scenario-row.ts` is immune (`embeddedOne`/`embeddedMany` accept both), but any future query written elsewhere is not. Prefer those combinators over hand-typed embeds.
-3. **35 lint warnings, 0 errors.** Almost all `react/only-export-components`, split between TanStack route files (unavoidable — a route module must export `Route`) and vendored BKLit chart code. Do not "fix" the route files. Do not let the count grow from new hand-written code.
-4. **Motion tokens are duplicated** between `src/lib/motion/tokens.ts` (source of truth for JS) and `globals.css` (CSS mirror). Intentional, but they can drift. Change both together.
-5. **`auth` bundle chunk is 390 kB** (107 kB gzip), the largest by far — it carries the Supabase client. Not addressed; revisit when performance work begins.
-6. **No CI.** `.github/` exists but no workflow enforces typecheck/lint/build.
-7. **A failed award is never retried later.** `awardAttemptXp` retries twice in-request, then gives up and hides the reward strip. The attempt row survives and the award is idempotent, so nothing is lost — but nothing reclaims it either. A reconciliation pass (award any attempt with no ledger row, on session start) is the fix.
-8. **Generated types must be regenerated by hand.** `src/types/database.types.ts` is checked in and the client is typed against it, but nothing enforces that it matches the migrations. A CI step running `supabase gen types` and failing on a diff would close this.
-9. **`docs/decisions/` is empty.** Architectural decisions are recorded in prose inside docs and code comments rather than as ADRs.
+1. **Three phases of progression SQL have never run.** 7.1 (XP) is deployed and verified live; **7.2 (mastery) and 7.3 (achievements) are authored but unapplied** — no Docker for a local Postgres, and pushing to the live project is the owner's call. Apply them, regenerate types, and run the gameplay harness before building on top. Everything client-side is verified; the SQL is not.
+2. **Zero tests.** `tests/unit`, `tests/integration`, `tests/e2e` contain only `.gitkeep`. No test runner is installed. Note that the XP math is deliberately *not* in TypeScript — it lives in SQL, so covering it needs a database harness (pgTAP or a Vitest integration suite against a local Supabase), not a unit test. CLAUDE.md mandates testing XP calculation, progress tracking, achievement logic, scenario evaluation, auth and DB policies — none of which are covered. Progression and mastery logic now exist untested. The mastery formula in particular has properties worth asserting (bounded, monotonic, order-independent); close this before achievements read mastery as input.
+3. **PostgREST embed cardinality is an invisible schema coupling.** Adding or dropping a UNIQUE constraint on a foreign key silently changes an embed between an object and an array. `scenario-row.ts` is immune (`embeddedOne`/`embeddedMany` accept both), but any future query written elsewhere is not. Prefer those combinators over hand-typed embeds.
+4. **35 lint warnings, 0 errors.** Almost all `react/only-export-components`, split between TanStack route files (unavoidable — a route module must export `Route`) and vendored BKLit chart code. Do not "fix" the route files. Do not let the count grow from new hand-written code.
+5. **Two deliberate duplications, both documented in place.** Motion tokens (`src/lib/motion/tokens.ts` ↔ `globals.css`) and the mastery tier ladder (`src/features/mastery/constants.ts` ↔ `public.mastery_tier_floor`). Both are intentional — the alternative is a round trip per rendered meter — and both can drift. Change each pair together.
+6. **`auth` bundle chunk is 390 kB** (107 kB gzip), the largest by far — it carries the Supabase client. Not addressed; revisit when performance work begins.
+7. **No CI.** `.github/` exists but no workflow enforces typecheck/lint/build.
+8. **A failed award is never retried later.** `awardAttemptXp` retries twice in-request, then gives up and hides the reward strip. The attempt row survives and the award is idempotent, so nothing is lost — but nothing reclaims it either. A reconciliation pass (award any attempt with no ledger row, on session start) is the fix.
+9. **Generated types must be regenerated by hand.** `src/types/database.types.ts` is checked in and the client is typed against it, but nothing enforces that it matches the migrations. A CI step running `supabase gen types` and failing on a diff would close this.
+10. **Achievement XP is absent from session XP.** `refresh_session_rollups` traces ledger rows to a session through an attempt, and an achievement is not attached to one. Total XP is correct; the session strip understates. Linking them is a schema change and was deliberately not made.
+11. **`docs/decisions/` is empty.** Architectural decisions are recorded in prose inside docs and code comments rather than as ADRs.
 
 **Recently cleaned (do not reintroduce):** a stray literal `@/` directory and a duplicate `src/lib/utils.ts` — both created by `shadcn add` writing to an unresolved alias. After any `shadcn add`, run `git status` and check for a top-level `@/` directory.
 
@@ -253,7 +278,7 @@ Unresolved. Do not silently pick one — surface it.
 
 Ordered by dependency, not by ambition.
 
-1. **Progression & reward systems** — XP and levels ✅ (7.1), mastery ✅ (7.2). Streaks, achievements and statistics remain. *Next; see §11.*
+1. **Progression & reward systems** — XP and levels ✅ (7.1), mastery ✅ (7.2), achievements ✅ (7.3). Streaks and statistics remain. *Next; see §11.*
 2. **Dashboard** — real progress, next-action clarity, empty states from InteractionPrinciples §4.
 3. **Profile** — mastery map, achievements trophy case, stats. First real consumer of `components/charts/`.
 4. **Settings** — preferences, reduced-motion toggle, theme, data controls (export/delete).
@@ -266,24 +291,23 @@ Ordered by dependency, not by ambition.
 
 ## 11. Exact next phase
 
-### Phase 7.3 — Achievements & Streaks
+### Phase 7.4 — Streaks & Statistics
 
-**Goal.** Close the reward layer. Both systems plug into `award_attempt_xp` at the seams documented in Section E of the two progression migrations; neither is a new pipeline.
+**Goal.** The last two rollups nothing writes. Both plug into `award_attempt_xp` beside `evaluate_achievements`; neither is a new pipeline.
 
 **Preconditions.**
-1. **Apply `20260726000002_phase7_2_bias_mastery.sql`** and run the gameplay harness. Achievements read mastery as input, so mastery must be observed working first.
-2. Regenerate `src/types/database.types.ts` after applying it.
-3. Stand up a database test harness (§8.1) — achievement criteria are exactly the logic CLAUDE.md says must be covered.
+1. **Apply migrations 7.1–7.3 and run the gameplay harness.** Three phases of progression SQL are now authored and unexecuted — see §8.
+2. Regenerate `src/types/database.types.ts` after applying them.
+3. Stand up a database test harness (§8.1).
 
 **Scope.**
-- `evaluate_achievements(player)` at the end of `award_attempt_xp`, after progress and mastery settle. The seeded `criteria` JSONB is already a small rule DSL; implement an evaluator for it rather than a switch per achievement. Transfer criteria read `bias_mastery.distinct_contexts` directly.
-- Achievement XP goes through `record_xp` with source `'achievement'` and `source_ref_id` = the achievement id. No second XP path.
-- `advance_streak(player, date)` — forgiving, with grace/repair per GameDesign §5. Never a guilt mechanic (InteractionPrinciples §13).
-- Reward UI extends the existing reveal surfaces. Celebration is `motion-celebrate`, sequenced, dismissible, never simultaneous, never full-screen.
+- `advance_streak(player, date)` writing `streaks` — forgiving, with grace/repair per GameDesign §5, never a guilt mechanic (InteractionPrinciples §13). **Must call `achievement_day_streak`** rather than compute its own run, or the streak card and the Steady Mind achievement will disagree about the same history.
+- `refresh_player_statistics(player)` writing `statistics` — derived, never incremented, same contract as `refresh_player_progress`.
+- A streak surface reusing the existing reward components. No new celebration language.
 
 **Out of scope.** Dashboard, profile, analytics, settings, adaptive difficulty, mastery decay, AI.
 
-**Done when.** An attempt unlocks a deserved achievement and advances the streak, both persist, and neither can be minted twice. Typecheck, lint and build clean.
+**Done when.** An attempt advances the streak and updates statistics, both persist, a missed day is forgiven rather than punished, and the streak number matches what unlocked Steady Mind. Typecheck, lint and build clean.
 
 ---
 

@@ -9,6 +9,7 @@ import {
   submitAttempt,
 } from '../api/game-service'
 import { awardAttemptXp, awardReflectionXp } from '../api/progression-service'
+import type { AchievementUnlock } from '@/features/achievements'
 import type {
   AttemptRecord,
   GamePhase,
@@ -38,6 +39,16 @@ type State = {
   reflectionXp: number | null
   /** Running session XP. Survives scenario changes; only the server sets it. */
   sessionXp: number
+  /**
+   * Unlocks still waiting to be revealed, oldest first. One at a time, so two
+   * celebratory moments never fire together (InteractionPrinciples §2).
+   */
+  pendingAchievements: AchievementUnlock[]
+  /**
+   * Everything unlocked this sitting, kept for the summary. The corner reveal is
+   * brief and skippable precisely because this list exists.
+   */
+  sessionAchievements: AchievementUnlock[]
   playedIds: string[]
   completedCount: number
   error: string | null
@@ -51,6 +62,7 @@ type Action =
   | { type: 'SUBMIT_START' }
   | { type: 'REVEALED'; attempt: AttemptRecord }
   | { type: 'AWARDED'; award: XpAward; kind: AwardKind }
+  | { type: 'ACHIEVEMENT_SEEN' }
   | { type: 'SUBMIT_REVERT' }
   | { type: 'LOADING_NEXT' }
   | { type: 'FINISHING' }
@@ -67,6 +79,8 @@ const initialState: State = {
   attemptXp: null,
   reflectionXp: null,
   sessionXp: 0,
+  pendingAchievements: [],
+  sessionAchievements: [],
   playedIds: [],
   completedCount: 0,
   error: null,
@@ -117,7 +131,13 @@ function reducer(state: State, action: Action): State {
           action.kind === 'attempt' ? action.award.awarded : state.attemptXp,
         reflectionXp:
           action.kind === 'reflection' ? action.award.awarded : state.reflectionXp,
+        // Unlocks are appended, never replaced: a reflection award arriving
+        // while the attempt's unlock is still on screen must not drop it.
+        pendingAchievements: [...state.pendingAchievements, ...action.award.achievements],
+        sessionAchievements: [...state.sessionAchievements, ...action.award.achievements],
       }
+    case 'ACHIEVEMENT_SEEN':
+      return { ...state, pendingAchievements: state.pendingAchievements.slice(1) }
     case 'SUBMIT_REVERT':
       return { ...state, phase: 'deciding' }
     case 'LOADING_NEXT':
@@ -205,6 +225,11 @@ export function useGameSession() {
     dispatch({ type: 'SELECT', choiceId })
   }, [])
 
+  /** Advance the unlock queue — on timeout, dismissal, or Escape. */
+  const dismissAchievement = useCallback(() => {
+    dispatch({ type: 'ACHIEVEMENT_SEEN' })
+  }, [])
+
   const submit = useCallback(async () => {
     const { session, scenario, selectedChoiceId } = stateRef.current
     const playerId = user?.id
@@ -287,5 +312,14 @@ export function useGameSession() {
     void init()
   }, [init])
 
-  return { state, select, submit, saveReflection, next, finish, retry }
+  return {
+    state,
+    select,
+    submit,
+    saveReflection,
+    next,
+    finish,
+    retry,
+    dismissAchievement,
+  }
 }
