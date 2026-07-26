@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { env } from '@/config/env'
+import type { Database } from '@/types/database.types'
 
 /**
  * Supabase browser client — singleton.
@@ -8,10 +9,13 @@ import { env } from '@/config/env'
  * anon key (safe for the client, gated by Row Level Security). The service
  * role key is never used here and must never reach the browser.
  *
- * The `Database` generic is intentionally omitted for now — generated types
- * are wired in once tables and migrations exist.
+ * Typed with the generated `Database` schema, so a column rename now breaks the
+ * build instead of returning `undefined` at runtime. Regenerate after every
+ * migration:
+ *
+ *   npx supabase gen types typescript --linked > src/types/database.types.ts
  */
-export const supabase: SupabaseClient = createClient(
+export const supabase: SupabaseClient<Database> = createClient<Database>(
   env.VITE_SUPABASE_URL,
   env.VITE_SUPABASE_ANON_KEY,
   {

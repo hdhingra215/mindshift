@@ -1,12 +1,13 @@
 import { supabase } from '@/lib/supabase/client'
 import type {
   AttemptRecord,
-  Difficulty,
   GameChoice,
-  GameScenario,
   GameSession,
   ReflectionInput,
+  ScenarioLoad,
 } from '../types'
+import { classifyQueryError, loadFailure, reportLoadFailure } from './load-failure'
+import { SCENARIO_SELECT, parseScenarioRow } from './scenario-row'
 
 /**
  * Gameplay data access. Every read is RLS-gated (published content only) and
@@ -20,105 +21,6 @@ const GENERIC_LOAD_ERROR =
   'We couldn’t load that just now — the connection may have wavered. Your progress is safe.'
 const GENERIC_WRITE_ERROR =
   'That didn’t save just now. Nothing’s lost — give it another go.'
-
-// --- Raw row shapes (the nested select result) ------------------------------
-
-type RawOutcome = {
-  id: string
-  result_text: string
-  explanation: string
-  is_correct: boolean
-  xp_reward: number
-}
-
-type RawChoice = {
-  id: string
-  label: string
-  body: string | null
-  sort_order: number
-  is_trap: boolean
-  bias_id: string | null
-  outcomes: RawOutcome[] | null
-}
-
-type RawBias = {
-  slug: string
-  name: string
-  short_description: string | null
-  counter_strategy: string | null
-}
-
-type RawScenario = {
-  id: string
-  slug: string
-  title: string
-  context: string
-  stakes: string | null
-  difficulty: Difficulty
-  categories: { name: string } | null
-  scenario_choices: RawChoice[] | null
-  scenario_biases: { biases: RawBias | null }[] | null
-  scenario_pack_items: { scenario_packs: { name: string } | null }[] | null
-}
-
-const SCENARIO_SELECT = `
-  id, slug, title, context, stakes, difficulty,
-  categories ( name ),
-  scenario_choices ( id, label, body, sort_order, is_trap, bias_id,
-    outcomes ( id, result_text, explanation, is_correct, xp_reward ) ),
-  scenario_biases ( biases ( slug, name, short_description, counter_strategy ) ),
-  scenario_pack_items ( scenario_packs ( name ) )
-`
-
-function mapScenario(row: RawScenario): GameScenario | null {
-  const choices: GameChoice[] = (row.scenario_choices ?? [])
-    .map((choice): GameChoice | null => {
-      const outcome = choice.outcomes?.[0]
-      if (!outcome) return null // a choice with no outcome can't be attempted
-      return {
-        id: choice.id,
-        label: choice.label,
-        body: choice.body,
-        sortOrder: choice.sort_order,
-        isTrap: choice.is_trap,
-        biasId: choice.bias_id,
-        outcome: {
-          id: outcome.id,
-          resultText: outcome.result_text,
-          explanation: outcome.explanation,
-          isCorrect: outcome.is_correct,
-          xpReward: outcome.xp_reward,
-        },
-      }
-    })
-    .filter((c): c is GameChoice => c !== null)
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-
-  // A scenario without at least two live choices isn't playable — skip it.
-  if (choices.length < 2) return null
-
-  const rawBias = row.scenario_biases?.[0]?.biases ?? null
-
-  return {
-    id: row.id,
-    slug: row.slug,
-    title: row.title,
-    context: row.context,
-    stakes: row.stakes,
-    difficulty: row.difficulty,
-    categoryName: row.categories?.name ?? null,
-    packName: row.scenario_pack_items?.[0]?.scenario_packs?.name ?? null,
-    choices,
-    primaryBias: rawBias
-      ? {
-          slug: rawBias.slug,
-          name: rawBias.name,
-          shortDescription: rawBias.short_description,
-          counterStrategy: rawBias.counter_strategy,
-        }
-      : null,
-  }
-}
 
 // --- Session ---------------------------------------------------------------
 
@@ -153,16 +55,20 @@ export async function getOrCreateSession(
   return { data: { id: created.data.id }, error: null }
 }
 
+/**
+ * Close a session. Only the lifecycle columns are written here — the counters
+ * (`total_attempts`, `total_xp_earned`) are owned by the XP engine's
+ * `refresh_session_rollups`, which derives them from the ledger on every award.
+ * Writing them from the client too would be a second, weaker calculation.
+ */
 export async function finishSession(
   sessionId: string,
-  totalAttempts: number,
 ): Promise<{ error: string | null }> {
   const { error } = await supabase
     .from('sessions')
     .update({
       ended_at: new Date().toISOString(),
       completed: true,
-      total_attempts: totalAttempts,
       updated_at: new Date().toISOString(),
     })
     .eq('id', sessionId)
@@ -175,11 +81,13 @@ export async function finishSession(
 /**
  * Fetch one playable published scenario the player hasn't seen this session.
  * Easy-first ordering (enum order) then slug — a gentle, deterministic ramp.
- * Returns `data: null, error: null` when nothing new is available (empty state).
+ *
+ * Returns a discriminated `ScenarioLoad` rather than a nullable scenario. The
+ * nullable version could not distinguish "you have played everything" from
+ * "the row was unreadable", so a defect rendered as a content state and stayed
+ * invisible. Every branch below is now named, and every defect is reported.
  */
-export async function fetchNextScenario(
-  excludeIds: string[],
-): Promise<Result<GameScenario | null>> {
+export async function fetchNextScenario(excludeIds: string[]): Promise<ScenarioLoad> {
   let query = supabase
     .from('scenarios')
     .select(SCENARIO_SELECT)
@@ -195,11 +103,31 @@ export async function fetchNextScenario(
 
   const { data, error } = await query.maybeSingle()
 
-  if (error) return { data: null, error: GENERIC_LOAD_ERROR }
-  if (!data) return { data: null, error: null }
+  if (error) {
+    const failure = classifyQueryError(error)
+    reportLoadFailure('fetchNextScenario', failure)
+    return { status: 'failed', failure }
+  }
 
-  const scenario = mapScenario(data as unknown as RawScenario)
-  return { data: scenario, error: null }
+  // No row: the library is exhausted for this session. A product state, not a
+  // defect — nothing is logged and the player gets the empty state.
+  if (!data) return { status: 'exhausted' }
+
+  const parsed = parseScenarioRow(data)
+
+  if (parsed.status === 'malformed') {
+    const failure = loadFailure('malformedData', parsed.detail)
+    reportLoadFailure('fetchNextScenario', failure)
+    return { status: 'failed', failure }
+  }
+
+  if (parsed.status === 'unplayable') {
+    const failure = loadFailure('unplayableData', parsed.detail)
+    reportLoadFailure('fetchNextScenario', failure)
+    return { status: 'failed', failure }
+  }
+
+  return { status: 'ok', scenario: parsed.scenario }
 }
 
 // --- Attempt (immutable) ----------------------------------------------------

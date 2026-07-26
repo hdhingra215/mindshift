@@ -12,6 +12,8 @@ type ScenarioPlayProps = {
   selectedChoiceId: string | null
   submitting: boolean
   completedCount: number
+  /** XP banked this session so far, as recorded by the server. */
+  sessionXp: number
   onSelect: (choiceId: string) => void
   onSubmit: () => void
 }
@@ -26,6 +28,7 @@ export function ScenarioPlay({
   selectedChoiceId,
   submitting,
   completedCount,
+  sessionXp,
   onSelect,
   onSubmit,
 }: ScenarioPlayProps) {
@@ -41,6 +44,12 @@ export function ScenarioPlay({
         <DifficultyBadge difficulty={scenario.difficulty} />
         <span className="ml-auto text-xs text-muted-foreground" aria-live="polite">
           Scenario {completedCount + 1} · this session
+          {sessionXp > 0 ? (
+            <>
+              {' · '}
+              <span className="tabular-nums text-reward">{sessionXp} XP</span>
+            </>
+          ) : null}
         </span>
       </div>
 

@@ -8,13 +8,18 @@ import {
   saveReflection as saveReflectionApi,
   submitAttempt,
 } from '../api/game-service'
+import { awardAttemptXp, awardReflectionXp } from '../api/progression-service'
 import type {
   AttemptRecord,
   GamePhase,
   GameScenario,
   GameSession,
   ReflectionInput,
+  XpAward,
 } from '../types'
+
+/** Which act earned an award — the reward strip labels the two differently. */
+type AwardKind = 'attempt' | 'reflection'
 
 type State = {
   phase: GamePhase
@@ -22,6 +27,17 @@ type State = {
   scenario: GameScenario | null
   selectedChoiceId: string | null
   attempt: AttemptRecord | null
+  /**
+   * The most recent award payload from the server, whichever act produced it.
+   * Always carries the freshest totals, so level and session XP read from here.
+   */
+  award: XpAward | null
+  /** XP the current attempt earned; null while the award is still in flight. */
+  attemptXp: number | null
+  /** Bonus the current reflection earned, once one has been written. */
+  reflectionXp: number | null
+  /** Running session XP. Survives scenario changes; only the server sets it. */
+  sessionXp: number
   playedIds: string[]
   completedCount: number
   error: string | null
@@ -34,6 +50,7 @@ type Action =
   | { type: 'SELECT'; choiceId: string }
   | { type: 'SUBMIT_START' }
   | { type: 'REVEALED'; attempt: AttemptRecord }
+  | { type: 'AWARDED'; award: XpAward; kind: AwardKind }
   | { type: 'SUBMIT_REVERT' }
   | { type: 'LOADING_NEXT' }
   | { type: 'FINISHING' }
@@ -46,6 +63,10 @@ const initialState: State = {
   scenario: null,
   selectedChoiceId: null,
   attempt: null,
+  award: null,
+  attemptXp: null,
+  reflectionXp: null,
+  sessionXp: 0,
   playedIds: [],
   completedCount: 0,
   error: null,
@@ -63,6 +84,10 @@ function reducer(state: State, action: Action): State {
         scenario: action.scenario,
         selectedChoiceId: null,
         attempt: null,
+        // The per-scenario award clears; session XP is cumulative and stays.
+        award: null,
+        attemptXp: null,
+        reflectionXp: null,
         error: null,
       }
     case 'EMPTY':
@@ -82,6 +107,16 @@ function reducer(state: State, action: Action): State {
         playedIds: state.scenario
           ? [...state.playedIds, state.scenario.id]
           : state.playedIds,
+      }
+    case 'AWARDED':
+      return {
+        ...state,
+        award: action.award,
+        sessionXp: action.award.sessionXp,
+        attemptXp:
+          action.kind === 'attempt' ? action.award.awarded : state.attemptXp,
+        reflectionXp:
+          action.kind === 'reflection' ? action.award.awarded : state.reflectionXp,
       }
     case 'SUBMIT_REVERT':
       return { ...state, phase: 'deciding' }
@@ -114,19 +149,27 @@ export function useGameSession() {
   stateRef.current = state
   const shownAtRef = useRef(0)
 
+  /*
+   * The three outcomes are handled separately and exhaustively. `EMPTY` is
+   * reachable from exactly one of them — an exhausted library — so a defect can
+   * never again be presented to the player as "nothing to play yet".
+   */
   const loadNext = useCallback(
     async (session: GameSession, playedIds: string[]) => {
-      const res = await fetchNextScenario(playedIds)
-      if (res.error) {
-        dispatch({ type: 'ERROR', error: res.error })
-        return
+      const load = await fetchNextScenario(playedIds)
+
+      switch (load.status) {
+        case 'ok':
+          shownAtRef.current = Date.now()
+          dispatch({ type: 'SCENARIO', session, scenario: load.scenario })
+          return
+        case 'exhausted':
+          dispatch({ type: 'EMPTY', session })
+          return
+        case 'failed':
+          dispatch({ type: 'ERROR', error: load.failure.message })
+          return
       }
-      if (!res.data) {
-        dispatch({ type: 'EMPTY', session })
-        return
-      }
-      shownAtRef.current = Date.now()
-      dispatch({ type: 'SCENARIO', session, scenario: res.data })
     },
     [],
   )
@@ -184,7 +227,15 @@ export function useGameSession() {
       toast.error(res.error ?? 'That didn’t save — give it another go.')
       return
     }
+
+    // Reveal the teaching content immediately and let the award land behind it.
+    // The insight is the point; XP is scaffolding and must never gate it.
     dispatch({ type: 'REVEALED', attempt: res.data })
+
+    const awarded = await awardAttemptXp(res.data.id)
+    if (awarded.data) {
+      dispatch({ type: 'AWARDED', award: awarded.data, kind: 'attempt' })
+    }
   }, [user?.id])
 
   const saveReflection = useCallback(
@@ -194,7 +245,21 @@ export function useGameSession() {
       if (!attempt || !playerId) {
         return { error: 'Your reflection couldn’t be saved just now.' }
       }
-      return saveReflectionApi({ attemptId: attempt.id, playerId, input })
+
+      const saved = await saveReflectionApi({
+        attemptId: attempt.id,
+        playerId,
+        input,
+      })
+      if (saved.error) return saved
+
+      // The bonus is claimed only after the reflection row exists — the server
+      // verifies that too, so the two can never disagree.
+      const awarded = await awardReflectionXp(attempt.id)
+      if (awarded.data) {
+        dispatch({ type: 'AWARDED', award: awarded.data, kind: 'reflection' })
+      }
+      return { error: null }
     },
     [user?.id],
   )
@@ -207,13 +272,13 @@ export function useGameSession() {
   }, [loadNext])
 
   const finish = useCallback(async () => {
-    const { session, completedCount } = stateRef.current
+    const { session } = stateRef.current
     if (!session) {
       dispatch({ type: 'SUMMARY' })
       return
     }
     dispatch({ type: 'FINISHING' })
-    const { error } = await finishSession(session.id, completedCount)
+    const { error } = await finishSession(session.id)
     if (error) toast.error(error)
     dispatch({ type: 'SUMMARY' })
   }, [])

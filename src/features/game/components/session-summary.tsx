@@ -4,11 +4,17 @@ import { Button } from '@/components/ui/button'
 
 type SessionSummaryProps = {
   completedCount: number
+  /** XP the session earned, as the server recorded it. */
+  sessionXp: number
   onPlayAgain: () => void
 }
 
 /** Calm, elegant end-of-session moment — reps framed as growth, no confetti. */
-export function SessionSummary({ completedCount, onPlayAgain }: SessionSummaryProps) {
+export function SessionSummary({
+  completedCount,
+  sessionXp,
+  onPlayAgain,
+}: SessionSummaryProps) {
   const played = completedCount > 0
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-5 py-10 text-center">
@@ -25,6 +31,19 @@ export function SessionSummary({ completedCount, onPlayAgain }: SessionSummaryPr
             : 'No scenarios this time — that’s fine. Come back whenever you’ve got a spare minute.'}
         </p>
       </div>
+
+      {/*
+       * The XP line is a footnote, not the headline — reps are the story and XP
+       * is the scaffolding under it (GameDesign §10). Omitted entirely at zero
+       * rather than shown as a "0", which would read as a score.
+       */}
+      {played && sessionXp > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium tabular-nums text-reward">+{sessionXp} XP</span>{' '}
+          earned this session
+        </p>
+      ) : null}
+
       <div className="flex w-full flex-col-reverse gap-3 sm:w-auto sm:flex-row">
         {played ? (
           <Button variant="outline" size="lg" onClick={onPlayAgain}>

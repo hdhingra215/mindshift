@@ -13,10 +13,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import { createScope, type Scope } from 'animejs'
 
-import { reveal, stopMotion, type RevealOptions } from './engine'
+import { countTo, reveal, stopMotion, type RevealOptions } from './engine'
 import { bindPointerVariables, subscribePointer, type PointerState } from './pointer'
 import { ambientMotionAllowed, prefersReducedMotion } from './reduced-motion'
-import { DURATION, EASE_CURVE, SPRING } from './tokens'
+import { DURATION, EASE_CURVE, SPRING, type DurationToken } from './tokens'
 
 /**
  * An Anime.js scope bound to a container element.
@@ -82,6 +82,45 @@ export function useReveal(
       stopMotion(targets)
     }
   }, [ref, enabled, selector])
+}
+
+export type CountToOptions = {
+  /** Where the count starts. Defaults to zero. */
+  from?: number
+  /** Duration tier. Numbers are small things; `base` is usually right. */
+  duration?: DurationToken
+  /** Render a value as text. Defaults to a rounded integer. */
+  format?: (value: number) => string
+}
+
+/**
+ * Count an element's text up to a number.
+ *
+ * The reward primitive: a value that *arrives* rather than appears reads as
+ * something the player earned. Re-runs whenever the target changes, so a second
+ * award in the same view counts on from where the first landed instead of
+ * restarting at zero.
+ *
+ * `countTo` already collapses to an instant write under reduced motion, so the
+ * number is always correct and never depends on the animation running.
+ */
+export function useCountTo(
+  ref: RefObject<HTMLElement | null>,
+  to: number | null,
+  options: CountToOptions = {}
+): void {
+  const optionsRef = useRef(options)
+  optionsRef.current = options
+
+  useEffect(() => {
+    const element = ref.current
+    if (!element || to === null) return
+
+    const animation = countTo(element, to, optionsRef.current)
+    return () => {
+      animation.revert()
+    }
+  }, [ref, to])
 }
 
 export type MagneticOptions = {
