@@ -43,7 +43,13 @@ export function Invitation({ isAuthed, hasPlayed, caught, className }: Invitatio
         'rounded-3xl border border-border bg-card/60 px-6 py-14 text-center depth-overlay sheen-top backdrop-blur-sm sm:px-12 sm:py-20',
         className
       )}
-      tone={caught ? 'success' : 'brand'}
+      /*
+       * The card is lit by what actually happened: blue for a catch, the
+       * discovery orange for a visitor the trap got, brand purple for one who
+       * has not played. Each hue stays in its own role, and the light is the
+       * page's last, quietest callback to the visitor's own result.
+       */
+      tone={hasPlayed ? (caught ? 'success' : 'reward') : 'brand'}
     >
       <h2 className="mx-auto max-w-2xl font-heading text-3xl font-bold tracking-tight text-balance text-foreground sm:text-5xl">
         {headline}

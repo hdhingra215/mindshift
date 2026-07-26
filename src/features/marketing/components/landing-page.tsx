@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { AnimatedSection, ParallaxLayer, RevealContainer } from '@/components/motion'
 import { useAuth } from '@/features/auth'
 
-import { HERO_SUBHEAD, TEASER_BIAS_SLUG } from '../constants'
+import { HERO_LEAD, HERO_SUPPORT, TEASER_BIAS_SLUG } from '../constants'
 import type { TeaserOutcome } from '../types'
 import { BlindspotConstellation } from './blindspot-constellation'
 import { ChapterMarker } from './chapter-marker'
@@ -62,9 +62,16 @@ export function LandingPage() {
               <HeroLens />
             </RevealContainer>
 
-            <RevealContainer className="mt-8 max-w-xl" delay={420} duration="slow">
-              <p className="text-lg leading-relaxed text-pretty text-muted-foreground">
-                {HERO_SUBHEAD}
+            {/*
+             * The plain answer, landing early and ranked in two tiers: the lead
+             * is foreground weight so it is caught in a glance, the support sits
+             * a step back in muted for the reader who stays. One paragraph, two
+             * levels of hierarchy — clarity without a second block of copy.
+             */}
+            <RevealContainer className="mt-8 max-w-2xl" delay={300} duration="slow">
+              <p className="text-lg leading-relaxed text-pretty sm:text-xl">
+                <span className="font-medium text-foreground">{HERO_LEAD}</span>{' '}
+                <span className="text-muted-foreground">{HERO_SUPPORT}</span>
               </p>
             </RevealContainer>
           </div>
@@ -76,7 +83,7 @@ export function LandingPage() {
           label="A scenario you can play right now"
           stagger="loose"
         >
-          <ChapterMarker label="A decision" ordinal="01" />
+          <ChapterMarker label="A decision" ordinal="01" tone="success" />
 
           <h2 className="mt-6 font-heading text-3xl font-bold tracking-tight text-balance text-foreground sm:text-4xl">
             No account needed. Just answer honestly.
@@ -92,7 +99,7 @@ export function LandingPage() {
           className="mx-auto w-full max-w-4xl px-6 py-20 sm:py-28"
           label="How the game works"
         >
-          <ChapterMarker label="The loop" ordinal="02" />
+          <ChapterMarker label="The loop" ordinal="02" tone="reward" />
 
           <h2 className="mt-6 max-w-2xl font-heading text-3xl font-bold tracking-tight text-balance text-foreground sm:text-4xl">
             That was the whole game. It just gets harder.
@@ -108,7 +115,7 @@ export function LandingPage() {
         >
           <div className="mx-auto w-full max-w-5xl">
             <RevealContainer revealOnScroll>
-              <ChapterMarker label="Your blind spots" ordinal="03" />
+              <ChapterMarker label="Your blind spots" ordinal="03" tone="warning" />
               <h2
                 className="mt-6 max-w-2xl font-heading text-3xl font-bold tracking-tight text-balance text-foreground sm:text-4xl"
                 id="blindspots-heading"

@@ -122,7 +122,10 @@ export function TrapTeaser({ onResolve, outcome, className }: TrapTeaserProps) {
         <p
           aria-live="polite"
           className={cn(
-            'mt-5 flex items-start gap-2 text-sm text-brand transition-opacity duration-[var(--motion-base)]',
+            // Warm yellow, not brand purple: this line is the realization beat
+            // — the moment the visitor is told to look again — and yellow is
+            // the accent that owns "pay attention to this".
+            'mt-5 flex items-start gap-2 text-sm text-warning transition-opacity duration-[var(--motion-base)]',
             isResolved ? 'opacity-100' : 'pointer-events-none opacity-0'
           )}
         >

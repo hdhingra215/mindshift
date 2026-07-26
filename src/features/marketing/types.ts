@@ -8,6 +8,8 @@
  * schema without dragging the landing page along.
  */
 
+import type { GlowTone } from '@/components/motion'
+
 export type TeaserChoiceId = 'framed-gain' | 'framed-loss' | 'identical'
 
 export type TeaserChoice = {
@@ -29,6 +31,21 @@ export type TeaserOutcome = {
   choice: TeaserChoice
   /** Whether the visitor caught the bias rather than being caught by it. */
   caught: boolean
+}
+
+/**
+ * One beat of the core loop as the landing page tells it.
+ *
+ * `tone` is a design-system lighting tone rather than a colour, so a beat can
+ * only be lit in a hue that already means something (GlowTone in
+ * `@/components/motion`) — the rail can never drift into decoration.
+ */
+export type LoopStage = {
+  id: string
+  ordinal: string
+  title: string
+  body: string
+  tone: GlowTone
 }
 
 /** A point on the blind-spot constellation. */

@@ -156,9 +156,16 @@ function ConstellationPoint({
           style={{
             opacity: isLit || revealName ? 1 : 'calc(0.18 + var(--nearness, 0) * 0.82)',
             transform: 'scale(calc(1 + var(--nearness, 0) * 0.9))',
+            /*
+             * An unlit point's halo warms from brand purple toward the soft
+             * error red as you close in — the only place red appears on this
+             * page, and it means what red always means here: this one has a
+             * cost. It is a hover-depth cue only; the point's name, not its
+             * hue, is what actually tells you anything.
+             */
             boxShadow: isLit
               ? '0 0 18px 2px color-mix(in oklab, var(--reward) 55%, transparent)'
-              : '0 0 calc(var(--nearness, 0) * 20px) calc(var(--nearness, 0) * 3px) color-mix(in oklab, var(--brand) calc(var(--nearness, 0) * 60%), transparent)',
+              : '0 0 calc(var(--nearness, 0) * 20px) calc(var(--nearness, 0) * 3px) color-mix(in oklab, color-mix(in oklab, var(--destructive) calc(var(--nearness, 0) * 28%), var(--brand)) calc(var(--nearness, 0) * 60%), transparent)',
           }}
         />
 

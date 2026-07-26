@@ -38,6 +38,22 @@ export function PerceptionField({ className }: PerceptionFieldProps) {
       className={cn('pointer-events-none absolute inset-0 overflow-hidden', className)}
       ref={ref}
     >
+      {/*
+       * A warm underlight beneath the lattice. Purple alone made the hero read
+       * cold and monochrome; a low-alpha reward wash — the discovery hue —
+       * gives the assembling world a temperature without adding a second
+       * visible element. It shares the pointer variables, so it costs nothing
+       * beyond the repaint already happening.
+       */}
+      <div
+        className="absolute inset-0"
+        style={{
+          opacity: 'calc(var(--pointer-opacity, 0) * 0.5)',
+          backgroundImage:
+            'radial-gradient(420px circle at var(--pointer-x, 50%) var(--pointer-y, 50%), color-mix(in oklab, var(--reward) 10%, transparent), transparent 70%)',
+        }}
+      />
+
       <div
         className="absolute inset-0 transition-opacity duration-[var(--motion-slow)] ease-[var(--ease-move)]"
         style={{

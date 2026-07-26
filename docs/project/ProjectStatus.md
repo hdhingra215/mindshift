@@ -2,7 +2,7 @@
 
 **Read this first.** This is the handoff document for every session. It records what exists, what does not, and what must not be changed. It is implementation state, not narrative.
 
-**Last updated:** 2026-07-25 · **After:** Phase 6.2D (Landing Page 2.0)
+**Last updated:** 2026-07-26 · **After:** Phase 6.2E (Landing Page refinement — hero clarity, colour balance, wordmark)
 
 ---
 
@@ -32,16 +32,13 @@ Read in this order:
 | 2–4 | Layers 2/3 DB schema — gameplay, progression, RLS | Committed |
 | 5 | MVP content library — biases, categories, levels, achievements, 6 packs, 30 scenarios | Committed |
 | 6.1 | Authentication foundation | Committed |
-| 6.2A/B | Authenticated shell — sidebar, bottom nav, top bar, user menu, page states | **Uncommitted** |
-| 6.2 (game) | Core gameplay loop — session, scenario, attempt, reflection, summary | **Uncommitted** |
-| 6.2C | Experience & Motion Foundation | **Uncommitted** |
-| 6.2D | Landing Page 2.0 | **Uncommitted** |
+| 6.2A/B | Authenticated shell — sidebar, bottom nav, top bar, user menu, page states | Committed |
+| 6.2 (game) | Core gameplay loop — session, scenario, attempt, reflection, summary | Committed |
+| 6.2C | Experience & Motion Foundation | Committed |
+| 6.2D | Landing Page 2.0 | Committed |
+| 6.2E | Landing page refinement — hero clarity, accent balance, wordmark period | **Uncommitted** |
 
-### ⚠️ The working tree is large and uncommitted
-
-`git log` ends at `8f984c3 feat: implement authentication foundation`. Everything from the authenticated shell onward — gameplay, motion system, landing page — exists only in the working tree.
-
-**First action of the next session: propose committing this work in logical slices** (shell → gameplay → motion foundation → landing page). Do not start new feature work on top of an uncommitted mountain.
+The 6.2A–D work landed in `688acf7 feat: complete gameplay vertical slice and landing experience`. Only the 6.2E refinement is currently in the working tree.
 
 ---
 
@@ -123,7 +120,7 @@ supabase/functions/    EMPTY — no edge functions yet
 
 | Surface | State |
 |---|---|
-| Landing page (`/`) | **Complete** — Phase 6.2D. Four chapters, playable framing-effect teaser, cursor lens, blind-spot constellation. |
+| Landing page (`/`) | **Complete** — Phase 6.2D, refined 6.2E. Four chapters, playable framing-effect teaser, cursor lens, blind-spot constellation. The hero states the product plainly (`HERO_LEAD` / `HERO_SUPPORT` in `features/marketing/constants.ts`) above the lens demonstration; chapter markers and the loop rail are lit by the accent that owns each beat's meaning. |
 | Auth screens | **Complete** — login, signup, forgot password, reset password, verify email. |
 | Authenticated shell | **Complete** — responsive sidebar/bottom nav, top bar, user menu, skip link, page skeleton, page error, page transition. |
 | `/play` | **Functional** — full loop UI. Will need reward surfaces once progression exists. |
@@ -172,14 +169,13 @@ Reduced motion is enforced in two layers — CSS for declarative animation, `lib
 
 Ordered by how much it will cost to leave.
 
-1. **Everything since auth is uncommitted.** Highest risk item in the repo. See §1.
-2. **Zero tests.** `tests/unit`, `tests/integration`, `tests/e2e` contain only `.gitkeep`. No test runner is installed. CLAUDE.md mandates testing XP calculation, progress tracking, achievement logic, scenario evaluation, auth and DB policies — none of which are covered. This debt compounds the moment progression logic is written, so install Vitest **before** Phase 7, not after.
-3. **No generated Supabase types.** Every `api/` layer hand-maps raw rows and casts through `as unknown as RawX`. A schema change fails silently at runtime instead of at compile time.
-4. **38 lint warnings, 0 errors.** Almost all `react/only-export-components`, split between TanStack route files (unavoidable — a route module must export `Route`) and vendored BKLit chart code. Do not "fix" the route files. Do not let the count grow from new hand-written code.
-5. **Motion tokens are duplicated** between `src/lib/motion/tokens.ts` (source of truth for JS) and `globals.css` (CSS mirror). Intentional, but they can drift. Change both together.
-6. **`auth` bundle chunk is 390 kB** (107 kB gzip), the largest by far — it carries the Supabase client. Not addressed; revisit when performance work begins.
-7. **No CI.** `.github/` exists but no workflow enforces typecheck/lint/build.
-8. **`docs/decisions/` is empty.** Architectural decisions are recorded in prose inside docs and code comments rather than as ADRs.
+1. **Zero tests.** `tests/unit`, `tests/integration`, `tests/e2e` contain only `.gitkeep`. No test runner is installed. CLAUDE.md mandates testing XP calculation, progress tracking, achievement logic, scenario evaluation, auth and DB policies — none of which are covered. This debt compounds the moment progression logic is written, so install Vitest **before** Phase 7, not after.
+2. **No generated Supabase types.** Every `api/` layer hand-maps raw rows and casts through `as unknown as RawX`. A schema change fails silently at runtime instead of at compile time.
+3. **35 lint warnings, 0 errors.** Almost all `react/only-export-components`, split between TanStack route files (unavoidable — a route module must export `Route`) and vendored BKLit chart code. Do not "fix" the route files. Do not let the count grow from new hand-written code.
+4. **Motion tokens are duplicated** between `src/lib/motion/tokens.ts` (source of truth for JS) and `globals.css` (CSS mirror). Intentional, but they can drift. Change both together.
+5. **`auth` bundle chunk is 390 kB** (107 kB gzip), the largest by far — it carries the Supabase client. Not addressed; revisit when performance work begins.
+6. **No CI.** `.github/` exists but no workflow enforces typecheck/lint/build.
+7. **`docs/decisions/` is empty.** Architectural decisions are recorded in prose inside docs and code comments rather than as ADRs.
 
 **Recently cleaned (do not reintroduce):** a stray literal `@/` directory and a duplicate `src/lib/utils.ts` — both created by `shadcn add` writing to an unresolved alias. After any `shadcn add`, run `git status` and check for a top-level `@/` directory.
 
@@ -223,9 +219,8 @@ Ordered by dependency, not by ambition.
 **Goal.** Make the loop reward learning. The player finishes a scenario and something durable happens — XP recorded, mastery moved, level and streak updated, achievements evaluated. This is the single largest gap between the current build and the MVP defined in the PRD.
 
 **Preconditions.**
-1. Commit the existing working tree in logical slices (§1).
-2. Get the XP economy numbers decided (§9) — or state explicit provisional values and flag them as tuning placeholders.
-3. Install Vitest and cover the progression math as it is written (§8.2).
+1. Get the XP economy numbers decided (§9) — or state explicit provisional values and flag them as tuning placeholders.
+2. Install Vitest and cover the progression math as it is written (§8.1).
 
 **Scope.**
 - **Server-side awarding.** Write progression in a Postgres function invoked on attempt submission, not in the client. The client must never be the authority on XP — RLS protects rows, but only server logic can protect the *rules*. This is a security boundary, not a preference.

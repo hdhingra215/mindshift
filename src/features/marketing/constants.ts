@@ -1,4 +1,4 @@
-import type { BiasPoint, TeaserChoice } from './types'
+import type { BiasPoint, LoopStage, TeaserChoice } from './types'
 
 /**
  * Landing-page content.
@@ -19,8 +19,19 @@ import type { BiasPoint, TeaserChoice } from './types'
 export const HERO_SURFACE = 'You see things as they are.'
 export const HERO_TRUTH = 'You see things as you are.'
 
-export const HERO_SUBHEAD =
-  'MindShift is a game that catches your mind in the act — then shows you the tell.'
+/**
+ * The hero's plain answer to "what is this?".
+ *
+ * The lens above it is a demonstration, not an explanation — so a visitor who
+ * reads nothing else must still learn the category (a game), the subject
+ * (cognitive bias), the mechanic (decisions you play) and the payoff (better
+ * judgement) inside a few seconds. It is split into a lead and a support line
+ * so the hierarchy does the work that a second paragraph otherwise would: the
+ * lead is scanned, the support is read.
+ */
+export const HERO_LEAD = 'MindShift is a game about the biases behind your decisions.'
+export const HERO_SUPPORT =
+  'Play out real situations, watch the trap inside each one spring, and learn to catch it before it costs you.'
 
 /**
  * The playable teaser: a framing-effect scenario (BiasCatalog §3.1).
@@ -70,27 +81,35 @@ export const TEASER_REWRITE_NOTE = 'Watch the options. Nothing about them change
  * The three beats of the core loop (GameDesign §2), compressed to their
  * essentials. Presented as one continuous progression rather than three
  * feature cards — the loop is a sequence, and the layout should say so.
+ *
+ * Each beat carries the accent that already owns its meaning in the design
+ * system, so the rail warms from brand purple through discovery orange to
+ * mastery blue as it fills. No accent is used outside its role — the sequence
+ * simply happens to pass through three of them.
  */
 export const LOOP_STAGES = [
   {
     id: 'decide',
     ordinal: '01',
     title: 'Decide',
+    tone: 'brand',
     body: 'A realistic situation with real stakes and no obviously wrong answer. Every option is one a sensible person would pick.',
   },
   {
     id: 'discover',
     ordinal: '02',
     title: 'Discover',
+    tone: 'reward',
     body: 'The outcome lands, the bias is named, and you find out what your mind did while you thought you were reasoning.',
   },
   {
     id: 'rewire',
     ordinal: '03',
     title: 'Rewire',
+    tone: 'success',
     body: 'The same trap returns later, wearing different clothes. Catching it there is the moment it becomes a reflex.',
   },
-] as const
+] as const satisfies readonly LoopStage[]
 
 /**
  * The twelve MVP biases (BiasCatalog), scattered as an unlit constellation.

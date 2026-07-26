@@ -11,6 +11,10 @@ type LogoProps = {
  * MindShift wordmark. The brand concept is a "shift" in thinking — expressed
  * with a single brand accent on the pivot letter, no cartoon brain.
  * Decorative; screen readers get the app name via the text itself.
+ *
+ * The closing period is part of the mark, not punctuation: it is the full stop
+ * at the end of a thought, and it renders in the foreground neutral in every
+ * context so the accent letter stays the only coloured glyph.
  */
 export function Logo({ className, showMark = true }: LogoProps) {
   return (
@@ -31,6 +35,9 @@ export function Logo({ className, showMark = true }: LogoProps) {
       ) : (
         APP_NAME.slice(-1)
       )}
+      <span aria-hidden="true" className="text-foreground">
+        .
+      </span>
     </span>
   )
 }

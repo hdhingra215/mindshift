@@ -12,4 +12,4 @@
  */
 
 export { LandingPage } from './components/landing-page'
-export type { BiasPoint, TeaserChoice, TeaserChoiceId, TeaserOutcome } from './types'
+export type { BiasPoint, LoopStage, TeaserChoice, TeaserChoiceId, TeaserOutcome } from './types'

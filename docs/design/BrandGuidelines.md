@@ -110,7 +110,9 @@ _(Direction only — no hex yet.)_
 
 ## Logo Direction
 
-_(Ideas only — no design yet.)_
+**Settled (implemented in `src/components/shared/logo.tsx`):** the wordmark is `MindShifT.` — the trailing letter carries the brand purple as the pivot, followed by a period in the foreground neutral. The period is part of the mark, not punctuation: it is the full stop at the end of a thought, and it renders in every context the logo appears. The accent letter is the only coloured glyph.
+
+_(Remaining ideas below — no symbol/icon design yet.)_
 
 - Concept: a **shift** in thinking — transformation, perspective change, the "click" of insight.
 - Explore a wordmark with one subtle twist (a rotated/mirrored letter, a directional cue) suggesting a mental pivot.
