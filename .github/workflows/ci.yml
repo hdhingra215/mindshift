@@ -1,0 +1,151 @@
+# MindShift CI
+#
+# Two jobs, split by what they need rather than by what they do.
+#
+#   static       typecheck, lint, build, unit tests. No network, no secrets, so
+#                it runs on every push and every pull request including forks.
+#   integration  the live harness and the privilege sweep. Needs a real Supabase
+#                project, so it runs only where secrets are available.
+#
+# ── Why the split matters ───────────────────────────────────────────────────
+# The progression economy lives in SQL and cannot be unit-tested (ProjectStatus
+# §8.2), so the integration job is the only thing that verifies it. It is also
+# the only thing standing between the product and a fourth privilege defect —
+# three shipped in three consecutive phases, each caught by luck. Running it
+# automatically is the entire point of this workflow.
+#
+# ── Secrets ─────────────────────────────────────────────────────────────────
+# Set as repository secrets, never in the repo:
+#   VITE_SUPABASE_URL
+#   VITE_SUPABASE_ANON_KEY
+#   SUPABASE_SERVICE_ROLE_KEY   (harness only: creates and deletes test players)
+#
+# The harness reads `process.env` before `.env.local`, so no file is written.
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+# A newer push supersedes an in-flight run on the same ref. `main` is excluded
+# so a merge is never cancelled halfway through the live suite.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: Typecheck · lint · build · unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Zero errors is the bar; the 33 warnings are pre-existing and documented
+      # (ProjectStatus §8.4). `--deny-warnings` would fail on vendored chart code
+      # nobody is going to fix, so the gate is errors only — which oxlint already
+      # enforces by exiting non-zero on them.
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      # Unit tests only. The integration suites self-skip without credentials,
+      # and a skip here would look like a pass — so they are excluded outright
+      # and given their own job.
+      - name: Unit tests
+        run: npm run test:unit
+
+  integration:
+    name: Live integration · privilege sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Forked pull requests cannot see secrets, by design. Skipping them is
+    # correct; the `static` job still gates the change, and a maintainer's own
+    # branch runs the full suite before anything merges.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # ── The guard that keeps this job honest ────────────────────────────
+      # The suites skip themselves when the project is unreachable, which is
+      # right for a developer whose Supabase project is paused and wrong for CI:
+      # a silent skip would report green while verifying nothing. On protected
+      # branches, missing credentials are a failure.
+      - name: Require credentials on protected branches
+        if: github.ref == 'refs/heads/main'
+        env:
+          URL: ${{ secrets.VITE_SUPABASE_URL }}
+          ANON: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SERVICE: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          missing=""
+          [ -n "$URL" ]     || missing="$missing VITE_SUPABASE_URL"
+          [ -n "$ANON" ]    || missing="$missing VITE_SUPABASE_ANON_KEY"
+          [ -n "$SERVICE" ] || missing="$missing SUPABASE_SERVICE_ROLE_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::main must run the live suite, but these secrets are missing:$missing"
+            exit 1
+          fi
+
+      # One execution, two reporters: `verbose` for a readable log and `json`
+      # for the skip audit below. Running the suite twice would double the live
+      # database load and the throwaway accounts it creates.
+      - name: Integration + security suites
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          npm run test:integration -- \
+            --reporter=verbose \
+            --reporter=json --outputFile=.vitest-integration.json
+
+      # A green run over zero executed tests is the failure mode this job exists
+      # to avoid. The suites skip themselves when the project is unreachable —
+      # correct for a developer with a paused project, and a silent lie in CI.
+      - name: Fail if the live suites skipped themselves
+        if: always() && github.ref == 'refs/heads/main'
+        run: |
+          node -e '
+            const fs = require("fs");
+            if (!fs.existsSync("./.vitest-integration.json")) {
+              console.error("::error::no vitest report produced — the suite did not run");
+              process.exit(1);
+            }
+            const r = JSON.parse(fs.readFileSync("./.vitest-integration.json", "utf8"));
+            const skipped = (r.numPendingTests ?? 0) + (r.numTodoTests ?? 0);
+            const passed = r.numPassedTests ?? 0;
+            console.log(`live: ${passed} passed, ${skipped} skipped`);
+            if (skipped > 0) {
+              console.error(`::error::${skipped} live test(s) skipped on main — the database was unreachable, so nothing was verified`);
+              process.exit(1);
+            }
+            if (passed === 0) {
+              console.error("::error::no live tests executed");
+              process.exit(1);
+            }
+          '

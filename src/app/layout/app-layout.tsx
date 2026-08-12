@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { FloatingBackground, MouseFollower } from '@/components/motion'
+import { WorldCanvas } from '@/components/world'
 
 type AppLayoutProps = {
   children?: ReactNode
@@ -25,7 +26,14 @@ type AppLayoutProps = {
 export function AppLayout({ children }: AppLayoutProps) {
   return (
     <div className="relative min-h-dvh bg-background text-foreground antialiased">
-      <FloatingBackground />
+      {/*
+       * Order is the depth order. The world's light, structure and camera sit
+       * furthest back; the ambient drift layer sits inside it as slow weather;
+       * the cursor light rides on top. Everything the player reads is above all
+       * three.
+       */}
+      <WorldCanvas />
+      <FloatingBackground intensity={0.32} />
       <MouseFollower />
       <main className="relative min-h-dvh">{children}</main>
     </div>

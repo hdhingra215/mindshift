@@ -9,13 +9,18 @@ import {
   submitAttempt,
 } from '../api/game-service'
 import { awardAttemptXp, awardReflectionXp } from '../api/progression-service'
+import { fetchInsightWallet, placeWager } from '../api/wager-service'
+import { requestTwinPrediction } from '@/features/profile'
+import type { TwinPrediction } from '@/features/profile'
 import type { AchievementUnlock } from '@/features/achievements'
 import type {
   AttemptRecord,
   GamePhase,
   GameScenario,
   GameSession,
+  InsightWallet,
   ReflectionInput,
+  WagerPhase,
   XpAward,
 } from '../types'
 
@@ -40,6 +45,19 @@ type State = {
   /** Running session XP. Survives scenario changes; only the server sets it. */
   sessionXp: number
   /**
+   * The Twin's guess about the current scenario, when it had one. Null on most
+   * scenarios by design — the server decides when the Twin speaks.
+   */
+  twinPrediction: TwinPrediction | null
+  /**
+   * The wager step for the current scenario. `unavailable` until the reserve is
+   * read, and it stays `unavailable` if that read fails — the scenario must
+   * remain playable when the economy is not.
+   */
+  wager: WagerPhase
+  /** The stake the player has highlighted but not yet committed. */
+  selectedStake: number | null
+  /**
    * Unlocks still waiting to be revealed, oldest first. One at a time, so two
    * celebratory moments never fire together (InteractionPrinciples §2).
    */
@@ -58,6 +76,12 @@ type Action =
   | { type: 'INIT' }
   | { type: 'SCENARIO'; session: GameSession; scenario: GameScenario }
   | { type: 'EMPTY'; session: GameSession }
+  | { type: 'TWIN_PREDICTED'; scenarioId: string; prediction: TwinPrediction }
+  | { type: 'WALLET'; scenarioId: string; wallet: InsightWallet }
+  | { type: 'STAKE_SELECTED'; stake: number | null }
+  | { type: 'WAGER_LOCKING' }
+  | { type: 'WAGER_LOCKED'; wagerId: string; stake: number }
+  | { type: 'WAGER_REJECTED' }
   | { type: 'SELECT'; choiceId: string }
   | { type: 'SUBMIT_START' }
   | { type: 'REVEALED'; attempt: AttemptRecord }
@@ -79,6 +103,9 @@ const initialState: State = {
   attemptXp: null,
   reflectionXp: null,
   sessionXp: 0,
+  twinPrediction: null,
+  wager: { status: 'unavailable' },
+  selectedStake: null,
   pendingAchievements: [],
   sessionAchievements: [],
   playedIds: [],
@@ -102,10 +129,58 @@ function reducer(state: State, action: Action): State {
         award: null,
         attemptXp: null,
         reflectionXp: null,
+        // Cleared with the scenario: a guess about the last one must never be
+        // shown over the next.
+        twinPrediction: null,
+        // Same for the wager. The reserve is re-read per scenario so the panel
+        // always shows a balance the server would actually honour.
+        wager: { status: 'unavailable' },
+        selectedStake: null,
         error: null,
       }
     case 'EMPTY':
       return { ...state, phase: 'empty', session: action.session }
+    case 'WALLET':
+      // Guarded on the scenario id, like the Twin: an async read that lands
+      // after the player moved on must not reopen a wager on the next scenario.
+      return state.scenario?.id === action.scenarioId && state.wager.status === 'unavailable'
+        ? { ...state, wager: { status: 'offered', wallet: action.wallet } }
+        : state
+    case 'STAKE_SELECTED':
+      return state.wager.status === 'offered'
+        ? { ...state, selectedStake: action.stake }
+        : state
+    case 'WAGER_LOCKING':
+      return state.wager.status === 'offered' && state.selectedStake !== null
+        ? {
+            ...state,
+            wager: { status: 'locking', wallet: state.wager.wallet, stake: state.selectedStake },
+          }
+        : state
+    case 'WAGER_LOCKED':
+      // Terminal for this scenario. There is no action that returns a locked
+      // wager to `offered` — changing a stake after commitment is the one thing
+      // the mechanic cannot allow.
+      return state.wager.status === 'locking'
+        ? {
+            ...state,
+            wager: {
+              status: 'locked',
+              wallet: state.wager.wallet,
+              wager: { wagerId: action.wagerId, stake: action.stake },
+            },
+          }
+        : state
+    case 'WAGER_REJECTED':
+      return state.wager.status === 'locking'
+        ? { ...state, wager: { status: 'offered', wallet: state.wager.wallet }, selectedStake: null }
+        : state
+    case 'TWIN_PREDICTED':
+      // Guarded on the scenario id: the prediction is fetched asynchronously and
+      // must be dropped if the player has already moved on.
+      return state.scenario?.id === action.scenarioId
+        ? { ...state, twinPrediction: action.prediction }
+        : state
     case 'SELECT':
       return state.phase === 'deciding'
         ? { ...state, selectedChoiceId: action.choiceId }
@@ -179,10 +254,35 @@ export function useGameSession() {
       const load = await fetchNextScenario(playedIds)
 
       switch (load.status) {
-        case 'ok':
+        case 'ok': {
           shownAtRef.current = Date.now()
           dispatch({ type: 'SCENARIO', session, scenario: load.scenario })
+
+          /*
+           * The Twin is asked *after* the scenario is on screen and never
+           * awaited. It speaks on a minority of scenarios, so blocking the
+           * decision on a round trip that usually returns "nothing to say" would
+           * be paying for silence. If it arrives late, the reducer drops it.
+           */
+          const scenarioId = load.scenario.id
+          void requestTwinPrediction(scenarioId).then((result) => {
+            if (result.status === 'ready') {
+              dispatch({ type: 'TWIN_PREDICTED', scenarioId, prediction: result.prediction })
+            }
+          })
+
+          /*
+           * The reserve is read per scenario and never awaited, for the same
+           * reason as the Twin: a scenario must be playable the instant it
+           * renders. A failed read leaves the wager `unavailable`, which is a
+           * designed state rather than an error — the player simply answers
+           * without staking.
+           */
+          void fetchInsightWallet().then((wallet) => {
+            if (wallet) dispatch({ type: 'WALLET', scenarioId, wallet })
+          })
           return
+        }
         case 'exhausted':
           dispatch({ type: 'EMPTY', session })
           return
@@ -225,6 +325,40 @@ export function useGameSession() {
     dispatch({ type: 'SELECT', choiceId })
   }, [])
 
+  const selectStake = useCallback((stake: number | null) => {
+    dispatch({ type: 'STAKE_SELECTED', stake })
+  }, [])
+
+  /**
+   * Commit the stake.
+   *
+   * Locked against the session and scenario *before* the attempt row exists, so
+   * the commitment provably precedes the recorded decision. The server
+   * revalidates the tier, the ownership and the balance — this call only names
+   * an amount.
+   */
+  const lockWager = useCallback(async () => {
+    const { session, scenario, selectedStake, wager } = stateRef.current
+    if (!session || !scenario || selectedStake === null || wager.status !== 'offered') return
+
+    dispatch({ type: 'WAGER_LOCKING' })
+    const result = await placeWager(session.id, scenario.id, selectedStake)
+
+    if (result.status === 'locked') {
+      dispatch({
+        type: 'WAGER_LOCKED',
+        wagerId: result.wager.wagerId,
+        stake: result.wager.stake,
+      })
+      return
+    }
+
+    // Never blocks play: the stake is dropped, the panel reopens, and the
+    // player answers with or without one.
+    dispatch({ type: 'WAGER_REJECTED' })
+    toast.error('That stake didn’t lock. Your Insight is untouched — answer away.')
+  }, [])
+
   /** Advance the unlock queue — on timeout, dismissal, or Escape. */
   const dismissAchievement = useCallback(() => {
     dispatch({ type: 'ACHIEVEMENT_SEEN' })
@@ -239,9 +373,10 @@ export function useGameSession() {
     if (!choice) return
 
     dispatch({ type: 'SUBMIT_START' })
+    // The player is no longer passed: `submit_attempt` derives it from the
+    // session, so the client cannot name whose decision this is.
     const res = await submitAttempt({
       sessionId: session.id,
-      playerId,
       scenarioId: scenario.id,
       choice,
       responseTimeMs: Date.now() - shownAtRef.current,
@@ -315,6 +450,8 @@ export function useGameSession() {
   return {
     state,
     select,
+    selectStake,
+    lockWager,
     submit,
     saveReflection,
     next,

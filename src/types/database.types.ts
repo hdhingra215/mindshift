@@ -81,6 +81,77 @@ export type Database = {
         }
         Relationships: []
       }
+      attempt_wagers: {
+        Row: {
+          attempt_id: string | null
+          balance_before: number
+          created_at: string
+          delta: number | null
+          id: string
+          player_id: string
+          resolved_at: string | null
+          scenario_id: string
+          session_id: string
+          stake: number
+          was_correct: boolean | null
+        }
+        Insert: {
+          attempt_id?: string | null
+          balance_before: number
+          created_at?: string
+          delta?: number | null
+          id?: string
+          player_id: string
+          resolved_at?: string | null
+          scenario_id: string
+          session_id: string
+          stake: number
+          was_correct?: boolean | null
+        }
+        Update: {
+          attempt_id?: string | null
+          balance_before?: number
+          created_at?: string
+          delta?: number | null
+          id?: string
+          player_id?: string
+          resolved_at?: string | null
+          scenario_id?: string
+          session_id?: string
+          stake?: number
+          was_correct?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attempt_wagers_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: true
+            referencedRelation: "attempts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attempt_wagers_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attempt_wagers_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "scenarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attempt_wagers_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attempts: {
         Row: {
           bias_id: string | null
@@ -933,6 +1004,76 @@ export type Database = {
           },
         ]
       }
+      twin_predictions: {
+        Row: {
+          actual_catch: boolean | null
+          attempt_id: string | null
+          context_kind: string
+          context_label: string
+          created_at: string
+          id: string
+          observed_rate: number
+          player_id: string
+          predicted_catch: boolean
+          resolved_at: string | null
+          sample_size: number
+          scenario_id: string
+          was_correct: boolean | null
+        }
+        Insert: {
+          actual_catch?: boolean | null
+          attempt_id?: string | null
+          context_kind: string
+          context_label: string
+          created_at?: string
+          id?: string
+          observed_rate: number
+          player_id: string
+          predicted_catch: boolean
+          resolved_at?: string | null
+          sample_size: number
+          scenario_id: string
+          was_correct?: boolean | null
+        }
+        Update: {
+          actual_catch?: boolean | null
+          attempt_id?: string | null
+          context_kind?: string
+          context_label?: string
+          created_at?: string
+          id?: string
+          observed_rate?: number
+          player_id?: string
+          predicted_catch?: boolean
+          resolved_at?: string | null
+          sample_size?: number
+          scenario_id?: string
+          was_correct?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "twin_predictions_attempt_id_fkey"
+            columns: ["attempt_id"]
+            isOneToOne: true
+            referencedRelation: "attempts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "twin_predictions_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "twin_predictions_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       xp_transactions: {
         Row: {
           amount: number
@@ -1035,6 +1176,11 @@ export type Database = {
         Returns: number
       }
       evaluate_achievements: { Args: { p_player_id: string }; Returns: Json }
+      insight_balance: { Args: { p_player_id: string }; Returns: number }
+      insight_recognition_award: { Args: never; Returns: number }
+      insight_starting_balance: { Args: never; Returns: number }
+      insight_wager_tiers: { Args: never; Returns: number[] }
+      insight_wallet: { Args: never; Returns: Json }
       level_for_total_xp: {
         Args: { p_total_xp: number }
         Returns: {
@@ -1045,6 +1191,10 @@ export type Database = {
         }[]
       }
       mastery_tier_floor: { Args: { p_tier: string }; Returns: number }
+      place_wager: {
+        Args: { p_scenario_id: string; p_session_id: string; p_stake: number }
+        Returns: Json
+      }
       progression_snapshot: {
         Args: {
           p_awarded: number
@@ -1130,10 +1280,72 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      refresh_player_streak: { Args: { p_player_id: string }; Returns: Json }
       refresh_session_rollups: {
         Args: { p_session_id: string }
         Returns: number
       }
+      resolve_attempt_wager: {
+        Args: { p_attempt_id: string; p_player_id: string }
+        Returns: Json
+      }
+      resolve_twin_prediction: {
+        Args: { p_attempt_id: string; p_player_id: string }
+        Returns: Json
+      }
+      streak_qualifying_days: {
+        Args: { p_player_id: string }
+        Returns: {
+          played_on: string
+        }[]
+      }
+      streak_state: {
+        Args: { p_allow_grace: boolean; p_player_id: string }
+        Returns: {
+          current_streak: number
+          grace_used: number
+          last_qualifying_day: string
+          longest_streak: number
+          qualified_today: boolean
+        }[]
+      }
+      submit_attempt: {
+        Args: {
+          p_choice_id: string
+          p_response_time_ms: number
+          p_scenario_id: string
+          p_session_id: string
+        }
+        Returns: Json
+      }
+      twin_attempt_facts: {
+        Args: { p_player_id: string }
+        Returns: {
+          attempt_id: string
+          caught: boolean
+          completed_at: string
+          context_kind: string
+          context_label: string
+        }[]
+      }
+      twin_cooldown_attempts: { Args: never; Returns: number }
+      twin_min_context_sample: { Args: never; Returns: number }
+      twin_min_edge: { Args: never; Returns: number }
+      twin_min_total_attempts: { Args: never; Returns: number }
+      twin_patterns: {
+        Args: { p_player_id: string }
+        Returns: {
+          catches: number
+          context_kind: string
+          context_label: string
+          edge: number
+          observed_rate: number
+          predicts_catch: boolean
+          sample_size: number
+        }[]
+      }
+      twin_predict_scenario: { Args: { p_scenario_id: string }; Returns: Json }
+      twin_state: { Args: { p_player_id: string }; Returns: Json }
     }
     Enums: {
       content_status: "draft" | "published" | "archived"

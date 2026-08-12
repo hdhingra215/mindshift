@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 import { supabase } from '@/lib/supabase/client'
 import type {
   AttemptRecord,
@@ -132,30 +134,75 @@ export async function fetchNextScenario(excludeIds: string[]): Promise<ScenarioL
 
 // --- Attempt (immutable) ----------------------------------------------------
 
+/**
+ * The reveal, as `submit_attempt` returns it.
+ *
+ * Parsed rather than asserted — the rule this file's sibling learned the hard
+ * way. A malformed reveal must surface here, not as `undefined` in the UI.
+ */
+const submitResultSchema = z.object({
+  attempt_id: z.string().min(1),
+  selected_choice_id: z.string().min(1),
+  outcome: z.object({
+    id: z.string().min(1),
+    is_correct: z.boolean(),
+    result_text: z.string(),
+    explanation: z.string(),
+    xp_reward: z.coerce.number().int(),
+  }),
+})
+
+/**
+ * Record a decision and get back what it turned out to be.
+ *
+ * ── Why this is an RPC and not an insert ────────────────────────────────────
+ * The client used to supply `outcome_id` on the attempt row, which meant it
+ * could record a trap choice against the *correct* outcome and collect the XP,
+ * the mastery credit and the wager payout for an answer it did not give. The
+ * insert policy is gone (Phase 8.6); the server derives the outcome from the
+ * chosen choice, so correctness is no longer something the client can assert.
+ *
+ * One round trip, because the reveal is the same fact as the submission — asking
+ * again would only add latency between the decision and its consequence.
+ */
 export async function submitAttempt(params: {
   sessionId: string
-  playerId: string
   scenarioId: string
   choice: GameChoice
   responseTimeMs: number
 }): Promise<Result<AttemptRecord>> {
-  const { data, error } = await supabase
-    .from('attempts')
-    .insert({
-      session_id: params.sessionId,
-      player_id: params.playerId,
-      scenario_id: params.scenarioId,
-      selected_choice_id: params.choice.id,
-      outcome_id: params.choice.outcome.id,
-      bias_id: params.choice.biasId,
-      response_time_ms: Math.max(0, Math.round(params.responseTimeMs)),
-      reflected: false,
-    })
-    .select('id')
-    .single()
+  const { data, error } = await supabase.rpc('submit_attempt', {
+    p_session_id: params.sessionId,
+    p_scenario_id: params.scenarioId,
+    p_choice_id: params.choice.id,
+    p_response_time_ms: Math.max(0, Math.round(params.responseTimeMs)),
+  })
 
-  if (error || !data) return { data: null, error: GENERIC_WRITE_ERROR }
-  return { data: { id: data.id, choice: params.choice }, error: null }
+  if (error) {
+    console.error(`[game:submit:${error.code}] ${error.message}`)
+    return { data: null, error: GENERIC_WRITE_ERROR }
+  }
+
+  const parsed = submitResultSchema.safeParse(data)
+  if (!parsed.success) {
+    console.error('[game:submit:malformed]', parsed.error.issues)
+    return { data: null, error: GENERIC_WRITE_ERROR }
+  }
+
+  return {
+    data: {
+      id: parsed.data.attempt_id,
+      choice: params.choice,
+      outcome: {
+        id: parsed.data.outcome.id,
+        resultText: parsed.data.outcome.result_text,
+        explanation: parsed.data.outcome.explanation,
+        isCorrect: parsed.data.outcome.is_correct,
+        xpReward: parsed.data.outcome.xp_reward,
+      },
+    },
+    error: null,
+  }
 }
 
 // --- Reflection (immutable) -------------------------------------------------

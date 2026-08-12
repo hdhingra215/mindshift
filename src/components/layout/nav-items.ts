@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { LayoutDashboard, Gamepad2, User, Settings } from 'lucide-react'
+import { LayoutDashboard, Gamepad2, Library, Settings } from 'lucide-react'
 
 /** A primary navigation destination in the authenticated shell. */
 export type NavItem = {
@@ -17,6 +17,8 @@ export type NavItem = {
 export const NAV_ITEMS: readonly NavItem[] = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
   { label: 'Play', to: '/play', icon: Gamepad2 },
-  { label: 'Profile', to: '/profile', icon: User },
+  // `/profile` is the route; "Archive" is what the place is called. The path
+  // stays put because renaming a route is a redirect problem, not a naming one.
+  { label: 'Archive', to: '/profile', icon: Library },
   { label: 'Settings', to: '/settings', icon: Settings },
 ] as const

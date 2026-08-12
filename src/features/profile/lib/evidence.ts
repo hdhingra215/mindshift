@@ -1,0 +1,272 @@
+import { MASTERY_MAX, type MasteryTierId } from '@/features/mastery'
+import type { ObservatoryBias } from '@/features/dashboard'
+
+import type { ArchiveCalibrationPoint, ArchiveDecision } from '../types'
+
+/**
+ * Descriptive summaries of a player's recorded history.
+ *
+ * ── The line this module must not cross ─────────────────────────────────────
+ * Nothing here computes progression. XP, mastery, accuracy, achievements and
+ * momentum are decided by the database and arrive already settled; recomputing
+ * any of them on the client would create a second, drifting answer to a question
+ * the server already owns.
+ *
+ * What these functions do instead is *describe the record*: how quickly
+ * decisions were made, how often they were reflected on, how confidence lined up
+ * with outcomes, where mastery sits across the twelve. None of it feeds back into
+ * the game, none of it unlocks anything, and none of it draws a conclusion about
+ * the player. It reports what is written down.
+ *
+ * That distinction is also why this file is pure and tested: it is the only
+ * place in the archive where a number is derived rather than read.
+ */
+
+/**
+ * Below this many reflected decisions, calibration says nothing.
+ *
+ * Stating "your confidence runs ahead of your accuracy" from two data points
+ * would be inventing a behavioural conclusion, which is exactly what this
+ * product refuses to do before the Cognitive Twin exists to do it properly.
+ */
+export const MIN_CALIBRATION_SAMPLE = 5
+
+/**
+ * Percentage points of gap within which confidence and accuracy are called
+ * aligned. Wide on purpose — a tight band would flip direction on noise.
+ */
+const CALIBRATION_TOLERANCE = 10
+
+export type DecisionSummary = {
+  /** Decisions in the window described. Zero for a new player. */
+  total: number
+  /** Median milliseconds to decide. Null when nothing is recorded. */
+  medianResponseMs: number | null
+  /** Share of decisions the player also reflected on, 0–1. */
+  reflectionRate: number
+  /** Clears per difficulty, in ladder order, omitting untouched rungs. */
+  byDifficulty: readonly DifficultyBand[]
+}
+
+export type DifficultyBand = {
+  difficulty: ArchiveDecision['difficulty']
+  attempted: number
+  caught: number
+}
+
+/** Difficulty in ladder order, so the readout never reshuffles. */
+const DIFFICULTY_ORDER = ['easy', 'medium', 'hard', 'expert'] as const
+
+/**
+ * Reduce the decision record to what the archive can honestly display.
+ *
+ * Accuracy is deliberately absent: `progress.overall_accuracy` is the server's
+ * number and the only one the product should ever show. Per-difficulty clears
+ * are included because the server exposes no such breakdown, and a player who
+ * catches every easy trap but no hard one is looking at the single most useful
+ * fact in their own record.
+ */
+export function summariseDecisions(decisions: readonly ArchiveDecision[]): DecisionSummary {
+  if (decisions.length === 0) {
+    return { total: 0, medianResponseMs: null, reflectionRate: 0, byDifficulty: [] }
+  }
+
+  const reflected = decisions.reduce((count, decision) => count + (decision.reflected ? 1 : 0), 0)
+
+  const bands = DIFFICULTY_ORDER.flatMap<DifficultyBand>((difficulty) => {
+    const band = decisions.filter((decision) => decision.difficulty === difficulty)
+    if (band.length === 0) return []
+    return [
+      {
+        difficulty,
+        attempted: band.length,
+        caught: band.reduce((count, decision) => count + (decision.isCorrect ? 1 : 0), 0),
+      },
+    ]
+  })
+
+  return {
+    total: decisions.length,
+    medianResponseMs: median(decisions.map((decision) => decision.responseTimeMs)),
+    reflectionRate: reflected / decisions.length,
+    byDifficulty: bands,
+  }
+}
+
+/**
+ * Median rather than mean.
+ *
+ * One decision left open in a background tab for an hour would drag a mean into
+ * meaninglessness. The median describes the player's actual habit and shrugs off
+ * the outlier without needing a rule about what counts as one.
+ */
+function median(values: readonly number[]): number | null {
+  const usable = values.filter((value) => Number.isFinite(value) && value >= 0).sort((a, b) => a - b)
+  if (usable.length === 0) return null
+
+  const middle = Math.floor(usable.length / 2)
+  return usable.length % 2 === 1
+    ? usable[middle]!
+    : Math.round((usable[middle - 1]! + usable[middle]!) / 2)
+}
+
+export type CalibrationSummary = {
+  sampleSize: number
+  /** Mean stated confidence, 0–100. Null below the sample floor. */
+  averageConfidence: number | null
+  /** Share of those same decisions that were correct, as 0–100. Null below the floor. */
+  observedAccuracy: number | null
+  /** Signed points of confidence minus accuracy. Null below the floor. */
+  gap: number | null
+  /**
+   * How the two numbers relate — a statement about the numbers, never about the
+   * person. `insufficient` is a first-class answer, not a failure.
+   */
+  direction: 'ahead' | 'behind' | 'aligned' | 'insufficient'
+}
+
+/**
+ * Compare what the player said they knew against what happened.
+ *
+ * Calibration is the one pattern in this product that a player genuinely cannot
+ * see from the inside, which is why it earns a place in the archive. It is
+ * reported as two numbers and their difference — the interface names the gap and
+ * stops there, because "you are overconfident" is a judgement about a person and
+ * this screen only holds evidence.
+ */
+export function summariseCalibration(
+  points: readonly ArchiveCalibrationPoint[],
+): CalibrationSummary {
+  const usable = points.filter(
+    (point) => Number.isFinite(point.confidenceBefore) && point.confidenceBefore >= 0,
+  )
+
+  if (usable.length < MIN_CALIBRATION_SAMPLE) {
+    return {
+      sampleSize: usable.length,
+      averageConfidence: null,
+      observedAccuracy: null,
+      gap: null,
+      direction: 'insufficient',
+    }
+  }
+
+  const averageConfidence =
+    usable.reduce((sum, point) => sum + point.confidenceBefore, 0) / usable.length
+  const observedAccuracy =
+    (usable.reduce((count, point) => count + (point.isCorrect ? 1 : 0), 0) / usable.length) * 100
+  const gap = averageConfidence - observedAccuracy
+
+  return {
+    sampleSize: usable.length,
+    averageConfidence: Math.round(averageConfidence),
+    observedAccuracy: Math.round(observedAccuracy),
+    gap: Math.round(gap),
+    direction:
+      Math.abs(gap) <= CALIBRATION_TOLERANCE ? 'aligned' : gap > 0 ? 'ahead' : 'behind',
+  }
+}
+
+export type FamilyStanding = {
+  name: string
+  /** Mean mastery across the family, 0–100. */
+  averageMastery: number
+  /** How many of its biases have been met at all. */
+  metCount: number
+  size: number
+}
+
+/**
+ * Mastery grouped by bias family, strongest first.
+ *
+ * The observatory already arranges families spatially; this is the same fact in
+ * a form a screen reader can read out, which is what keeps the scene from being
+ * a picture that only sighted players can use.
+ */
+export function standingsByFamily(biases: readonly ObservatoryBias[]): FamilyStanding[] {
+  const families = new Map<string, ObservatoryBias[]>()
+
+  for (const bias of biases) {
+    const name = bias.categoryName ?? 'Unfiled'
+    const existing = families.get(name)
+    if (existing) existing.push(bias)
+    else families.set(name, [bias])
+  }
+
+  return [...families.entries()]
+    .map(([name, members]) => ({
+      name,
+      averageMastery:
+        Math.round(
+          (members.reduce((sum, bias) => sum + bias.masteryLevel, 0) / members.length) * 10,
+        ) / 10,
+      metCount: members.filter((bias) => bias.totalAttempts > 0).length,
+      size: members.length,
+    }))
+    .sort((a, b) => b.averageMastery - a.averageMastery || a.name.localeCompare(b.name))
+}
+
+/**
+ * How the twelve biases sit across the tier ladder.
+ *
+ * A shape, not a score: five counts summing to twelve. It answers "where am I
+ * broadly" without inventing an overall mastery figure, which the product
+ * deliberately does not have.
+ */
+export function masteryDistribution(
+  biases: readonly ObservatoryBias[],
+): Record<MasteryTierId, number> {
+  const distribution: Record<MasteryTierId, number> = {
+    unfamiliar: 0,
+    aware: 0,
+    practiced: 0,
+    skilled: 0,
+    mastered: 0,
+  }
+
+  for (const bias of biases) {
+    distribution[bias.tier.id] += 1
+  }
+
+  return distribution
+}
+
+/**
+ * The single most-integrated bias — the archive's counterweight to the
+ * dashboard's "weakest known".
+ *
+ * Only counts biases actually met, and only above the floor tier: crowning a
+ * bias the player has never encountered would be the archive congratulating
+ * someone for a blank.
+ */
+export function strongestKnown(biases: readonly ObservatoryBias[]): ObservatoryBias | null {
+  const known = biases.filter((bias) => bias.totalAttempts > 0 && bias.masteryLevel > 0)
+  if (known.length === 0) return null
+
+  return known.reduce((strongest, bias) =>
+    bias.masteryLevel > strongest.masteryLevel ? bias : strongest,
+  )
+}
+
+/** A response time as a short, plain reading — `"12s"`, `"1m 04s"`. */
+export function formatDeliberation(ms: number | null): string {
+  if (ms === null || !Number.isFinite(ms) || ms < 0) return '—'
+
+  const totalSeconds = Math.round(ms / 1000)
+  if (totalSeconds < 60) return `${totalSeconds}s`
+
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}m ${String(seconds).padStart(2, '0')}s`
+}
+
+/** A 0–1 share as a whole percentage — `"38%"`. */
+export function formatShare(share: number): string {
+  const bounded = Math.min(1, Math.max(0, Number.isFinite(share) ? share : 0))
+  return `${Math.round(bounded * 100)}%`
+}
+
+/** Mastery averaged across a family, as a percentage of the scale. */
+export function formatFamilyMastery(standing: FamilyStanding): string {
+  return `${Math.round((standing.averageMastery / MASTERY_MAX) * 100)}%`
+}

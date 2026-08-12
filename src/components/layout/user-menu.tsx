@@ -82,7 +82,7 @@ export function UserMenu({ variant = 'compact' }: UserMenuProps) {
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => void navigate({ to: '/profile' })}>
           <UserIcon aria-hidden="true" />
-          Profile
+          Archive
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void navigate({ to: '/settings' })}>
           <SettingsIcon aria-hidden="true" />

@@ -2,6 +2,9 @@ import { z } from 'zod'
 
 import { achievementUnlockSchema } from '@/features/achievements'
 import { masteryAwardSchema } from '@/features/mastery'
+import { streakStateSchema } from '@/features/streaks'
+import { twinVerdictSchema } from '@/features/profile'
+import { wagerOutcomeSchema } from './wager-service'
 import { supabase } from '@/lib/supabase/client'
 import type { XpAward } from '../types'
 
@@ -49,11 +52,19 @@ const xpAwardSchema = z
     previous_level: z.coerce.number().int(),
     session_xp: z.coerce.number(),
     scenarios_completed: z.coerce.number().int(),
-    // Both absent on a deployment where 7.2 / 7.3 have not been applied yet.
+    // All three absent on a deployment where 7.2 / 7.3 / 8.1 are not applied.
     // Progression must not fail because the newest part of the payload is
     // missing — XP still has to land.
     mastery: z.array(masteryAwardSchema).nullish(),
     achievements: z.array(achievementUnlockSchema).nullish(),
+    streak: streakStateSchema.nullish(),
+    // Present only when this attempt resolved an open Twin prediction, and
+    // absent entirely before the Twin migration. Neither may break an award.
+    twin: twinVerdictSchema.nullish(),
+    // Present only when this attempt resolved a locked wager. The balance rides
+    // along on every award so the next scenario's panel needs no second read.
+    wager: wagerOutcomeSchema.nullish(),
+    insight_balance: z.coerce.number().int().nullish(),
   })
   .transform(
     (row): XpAward => ({
@@ -70,6 +81,10 @@ const xpAwardSchema = z
       scenariosCompleted: row.scenarios_completed,
       mastery: row.mastery ?? [],
       achievements: row.achievements ?? [],
+      streak: row.streak ?? null,
+      twin: row.twin ?? null,
+      wager: row.wager ?? null,
+      insightBalance: row.insight_balance ?? null,
     }),
   )
 

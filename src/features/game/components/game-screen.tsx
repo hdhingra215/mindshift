@@ -1,10 +1,13 @@
 import { Button } from '@/components/ui/button'
 import { AchievementToast } from '@/features/achievements'
 import { MasteryReveal } from '@/features/mastery'
+import { TwinPredictionCard, TwinVerdictCard } from '@/features/profile'
 import { useGameSession } from '../hooks/use-game-session'
 import { GAME_FINISHING_MESSAGES, GAME_LOADING_MESSAGES } from '../constants'
 import { GameEmpty, GameError, GameLoading } from './game-states'
 import { ScenarioPlay } from './scenario-play'
+import { WagerPanel } from './wager-panel'
+import { WagerResult } from './wager-result'
 import { OutcomeReveal } from './outcome-reveal'
 import { ReflectionPanel } from './reflection-panel'
 import { SessionSummary } from './session-summary'
@@ -16,8 +19,18 @@ import { XpReward } from './xp-reward'
  * presentation switch.
  */
 export function GameScreen() {
-  const { state, select, submit, saveReflection, next, finish, retry, dismissAchievement } =
-    useGameSession()
+  const {
+    state,
+    select,
+    selectStake,
+    lockWager,
+    submit,
+    saveReflection,
+    next,
+    finish,
+    retry,
+    dismissAchievement,
+  } = useGameSession()
 
   /*
    * The unlock reveal is mounted outside the phase switch, so it survives the
@@ -65,6 +78,16 @@ export function GameScreen() {
       if (!state.scenario) return <GameLoading messages={GAME_LOADING_MESSAGES} />
       return (
         <>
+          {/*
+           * Above the scenario, and only when the Twin had something to say.
+           * It never gates the decision — if the guess arrives late it simply
+           * does not appear for this scenario.
+           */}
+          {state.twinPrediction ? (
+            <div className="mb-6">
+              <TwinPredictionCard prediction={state.twinPrediction} />
+            </div>
+          ) : null}
           <ScenarioPlay
             scenario={state.scenario}
             selectedChoiceId={state.selectedChoiceId}
@@ -74,6 +97,20 @@ export function GameScreen() {
             onSubmit={() => void submit()}
             sessionXp={state.sessionXp}
           />
+          {/*
+           * The second decision, under the first. Answer, then decide how much
+           * you trust it — the order matters, so the panel only enables once a
+           * choice is selected.
+           */}
+          <div className="mt-6">
+            <WagerPanel
+              enabled={state.selectedChoiceId !== null}
+              onLock={() => void lockWager()}
+              onSelectStake={selectStake}
+              phase={state.wager}
+              selectedStake={state.selectedStake}
+            />
+          </div>
           {achievementToast}
         </>
       )
@@ -85,6 +122,16 @@ export function GameScreen() {
       return (
         <div className="flex flex-col gap-6">
           <OutcomeReveal scenario={state.scenario} attempt={state.attempt} />
+          {/*
+           * The verdict sits directly under the teaching and above the reward.
+           * It is a consequence of the decision, not a prize for it.
+           */}
+          {/*
+           * The player's own commitment settles before the Twin's guess: their
+           * decision first, the model's opinion of it second.
+           */}
+          {state.award?.wager ? <WagerResult outcome={state.award.wager} /> : null}
+          {state.award?.twin ? <TwinVerdictCard verdict={state.award.twin} /> : null}
           {/*
            * Rendered only once the server has actually awarded. The reveal
            * never waits on it — the teaching lands first, the reward settles in

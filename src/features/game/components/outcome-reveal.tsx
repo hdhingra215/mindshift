@@ -15,7 +15,7 @@ type OutcomeRevealProps = {
  * transfer; the bias's counter-strategy is surfaced as its own callout.
  */
 export function OutcomeReveal({ scenario, attempt }: OutcomeRevealProps) {
-  const { outcome } = attempt.choice
+  const { outcome } = attempt
   const correct = outcome.isCorrect
   const bias = scenario.primaryBias
 

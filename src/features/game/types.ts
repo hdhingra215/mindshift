@@ -1,5 +1,7 @@
 import type { AchievementUnlock } from '@/features/achievements'
 import type { MasteryAward } from '@/features/mastery'
+import type { StreakState } from '@/features/streaks'
+import type { TwinVerdict } from '@/features/profile'
 
 /**
  * Gameplay domain types (camelCase), mapped from the snake_case DB rows in the
@@ -15,6 +17,14 @@ export const DIFFICULTIES = ['easy', 'medium', 'hard', 'expert'] as const
 
 export type Difficulty = (typeof DIFFICULTIES)[number]
 
+/**
+ * What a choice turned out to be — available only *after* it was chosen.
+ *
+ * The server derives this from the recorded decision and returns it with the
+ * attempt. It is never part of a scenario load: a question that arrives with its
+ * own answer key is not a question, and Phase 8.5 put Insight on the line, so
+ * knowing the answer early is worth something.
+ */
 export type GameOutcome = {
   id: string
   resultText: string
@@ -23,15 +33,19 @@ export type GameOutcome = {
   xpReward: number
 }
 
+/**
+ * One answerable option, as the player sees it before deciding.
+ *
+ * Carries no `isTrap`, no `biasId` and no outcome — every one of those names the
+ * right answer. The database will not return them either (column privileges and
+ * the `outcomes_read_after_attempt` policy), so this type is not merely a polite
+ * omission.
+ */
 export type GameChoice = {
   id: string
   label: string
   body: string | null
   sortOrder: number
-  isTrap: boolean
-  /** The bias this choice embodies (trap choices); null for correct/distractor. */
-  biasId: string | null
-  outcome: GameOutcome
 }
 
 export type GameBias = {
@@ -97,10 +111,16 @@ export type ScenarioLoad =
   | { status: 'exhausted' }
   | { status: 'failed'; failure: GameLoadFailure }
 
-/** Result of a submitted (immutable) attempt. */
+/**
+ * A recorded, immutable decision and what it turned out to be.
+ *
+ * The outcome arrives here rather than on the choice, because this is the first
+ * moment the player is entitled to it.
+ */
 export type AttemptRecord = {
   id: string
   choice: GameChoice
+  outcome: GameOutcome
 }
 
 /**
@@ -141,7 +161,73 @@ export type XpAward = {
    * moment lands last. Empty on almost every attempt — that is the point.
    */
   achievements: readonly AchievementUnlock[]
+  /**
+   * Momentum after this award. Null on a deployment predating the streak engine —
+   * XP must still land if the newest system does not.
+   */
+  streak: StreakState | null
+  /**
+   * How the Cognitive Twin's prediction turned out, when one was open for this
+   * scenario. Null on almost every attempt — the Twin predicts occasionally by
+   * design — and null on a deployment predating it.
+   */
+  twin: TwinVerdict | null
+  /** How the wager settled. Null when the player did not stake on this one. */
+  wager: WagerOutcome | null
+  /**
+   * The Insight reserve after this award, wagered or not. Always present so the
+   * next scenario's panel needs no extra round trip; null only on a deployment
+   * predating the economy.
+   */
+  insightBalance: number | null
 }
+
+/**
+ * The player's Insight reserve, as the server reports it.
+ *
+ * Insight is earned by play and spent only on conviction. It has **no
+ * real-world value**, cannot be purchased, transferred or withdrawn, and is
+ * deliberately not XP: a lost wager must never be able to de-level a player
+ * (ProjectStatus §12.20).
+ */
+export type InsightWallet = {
+  balance: number
+  /** Every stake the economy defines, affordable or not. */
+  tiers: readonly number[]
+  /** Insight earned per correct decision, wagered or not. The recovery path. */
+  recognitionAward: number
+}
+
+/** A stake locked before the decision was recorded. */
+export type LockedWager = {
+  wagerId: string
+  stake: number
+}
+
+/** How a locked wager settled, returned by the award that resolved it. */
+export type WagerOutcome = {
+  wagerId: string
+  stake: number
+  wasCorrect: boolean
+  /** Signed movement: `+stake` or `-stake`. Even money, always. */
+  delta: number
+  balanceBefore: number
+  balanceAfter: number
+}
+
+/**
+ * The wager step's lifecycle, mirroring the server's.
+ *
+ * `unavailable` is a first-class state, not an error: a player with an empty
+ * reserve, or a deployment predating the economy, plays the scenario exactly as
+ * before. The wager may never be able to block the game.
+ */
+export type WagerPhase =
+  | { status: 'unavailable' }
+  | { status: 'offered'; wallet: InsightWallet }
+  | { status: 'locking'; wallet: InsightWallet; stake: number }
+  | { status: 'locked'; wallet: InsightWallet; wager: LockedWager }
+  | { status: 'skipped'; wallet: InsightWallet }
 
 export type ReflectionInput = {
   text: string

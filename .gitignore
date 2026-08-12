@@ -49,3 +49,6 @@ Thumbs.db
 # supabase
 supabase/.temp/
 supabase/.branches/
+
+# Vitest JSON report used by the CI skip audit.
+.vitest-integration.json

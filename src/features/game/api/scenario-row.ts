@@ -77,22 +77,21 @@ const nullableText = z
 // layer guards *shape*, and a stricter format check would only invent new ways
 // for a perfectly playable scenario to be rejected.
 
-const outcomeRowSchema = z.object({
-  id: z.string().min(1),
-  result_text: z.string(),
-  explanation: z.string(),
-  is_correct: z.boolean(),
-  xp_reward: z.number().int(),
-})
-
+/**
+ * A choice, as the player is allowed to see it before answering.
+ *
+ * ── What is deliberately absent ─────────────────────────────────────────────
+ * `is_trap`, `bias_id` and the whole `outcomes` embed. Each of those identifies
+ * the right answer, and a scenario that arrives carrying its own answer key is
+ * not a question (Phase 8.6). They are not merely omitted from the select
+ * string: column privileges and RLS make them unreadable, so requesting them
+ * here would fail rather than quietly succeed.
+ */
 const choiceRowSchema = z.object({
   id: z.string().min(1),
   label: z.string(),
   body: nullableText,
   sort_order: z.number().int(),
-  is_trap: z.boolean(),
-  bias_id: nullableText,
-  outcomes: embeddedOne(outcomeRowSchema),
 })
 
 const biasRowSchema = z.object({
@@ -126,8 +125,7 @@ type ScenarioRow = z.infer<typeof scenarioRowSchema>
 export const SCENARIO_SELECT = `
   id, slug, title, context, stakes, difficulty,
   categories ( name ),
-  scenario_choices ( id, label, body, sort_order, is_trap, bias_id,
-    outcomes ( id, result_text, explanation, is_correct, xp_reward ) ),
+  scenario_choices ( id, label, body, sort_order ),
   scenario_biases ( biases ( slug, name, short_description, counter_strategy ) ),
   scenario_pack_items ( scenario_packs ( name ) )
 `
@@ -163,46 +161,30 @@ export function parseScenarioRow(row: unknown): ScenarioParse {
   const scenario = toGameScenario(parsed.data)
 
   if (scenario.choices.length < MIN_PLAYABLE_CHOICES) {
-    const total = parsed.data.scenario_choices.length
     return {
       status: 'unplayable',
       detail:
-        `scenario "${parsed.data.slug}" returned ${total} choice(s), of which ` +
-        `${scenario.choices.length} carried an outcome — ` +
-        `${MIN_PLAYABLE_CHOICES} are required`,
+        `scenario "${parsed.data.slug}" returned ${scenario.choices.length} choice(s) — ` +
+        `${MIN_PLAYABLE_CHOICES} are required. Whether each is answerable is now ` +
+        `settled by the server on submit, so this only catches an empty scenario`,
     }
   }
 
   return { status: 'ok', scenario }
 }
 
-function toGameChoice(choice: ScenarioRow['scenario_choices'][number]): GameChoice | null {
-  // A choice with no outcome cannot be attempted: there would be nothing to
-  // record on the attempt row and nothing to teach on the reveal.
-  const outcome = choice.outcomes
-  if (!outcome) return null
-
+function toGameChoice(choice: ScenarioRow['scenario_choices'][number]): GameChoice {
   return {
     id: choice.id,
     label: choice.label,
     body: choice.body,
     sortOrder: choice.sort_order,
-    isTrap: choice.is_trap,
-    biasId: choice.bias_id,
-    outcome: {
-      id: outcome.id,
-      resultText: outcome.result_text,
-      explanation: outcome.explanation,
-      isCorrect: outcome.is_correct,
-      xpReward: outcome.xp_reward,
-    },
   }
 }
 
 function toGameScenario(row: ScenarioRow): GameScenario {
   const choices = row.scenario_choices
     .map(toGameChoice)
-    .filter((choice): choice is GameChoice => choice !== null)
     .sort((a, b) => a.sortOrder - b.sortOrder)
 
   const bias = row.scenario_biases[0]?.biases ?? null
