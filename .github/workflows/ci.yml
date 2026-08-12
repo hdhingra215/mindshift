@@ -2,8 +2,10 @@
 #
 # Two jobs, split by what they need rather than by what they do.
 #
-#   static       typecheck, lint, build, unit tests. No network, no secrets, so
-#                it runs on every push and every pull request including forks.
+#   static       typecheck, lint, build, unit tests. No network, but the build
+#                and the unit suite both load src/config/env.ts, which validates
+#                the two public VITE_ variables on import — so the job needs
+#                those two (and only those two) from repository secrets.
 #   integration  the live harness and the privilege sweep. Needs a real Supabase
 #                project, so it runs only where secrets are available.
 #
@@ -43,6 +45,13 @@ jobs:
     name: Typecheck · lint · build · unit
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Public client configuration only. `src/config/env.ts` validates both on
+    # import, so the build and the unit suite cannot load without them. The
+    # service-role key is deliberately absent: nothing in this job may bypass
+    # RLS, and env.ts refuses to start if a secret ever arrives VITE_-prefixed.
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v4
 
