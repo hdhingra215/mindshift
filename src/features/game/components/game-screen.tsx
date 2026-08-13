@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { useSoundscape } from '@/lib/feedback'
 import { AchievementToast } from '@/features/achievements'
 import { MasteryReveal } from '@/features/mastery'
 import { TwinPredictionCard, TwinVerdictCard } from '@/features/profile'
@@ -19,6 +20,15 @@ import { XpReward } from './xp-reward'
  * presentation switch.
  */
 export function GameScreen() {
+  /*
+   * The quietest room in the product, and deliberately so: the decision cues
+   * have to stand out against it, and someone reading a scenario is thinking.
+   * Momentum is not passed here — it belongs to the surfaces that actually read
+   * the player's run, and a room that resolved mid-session would be scoring the
+   * session rather than describing it.
+   */
+  useSoundscape('play')
+
   const {
     state,
     select,

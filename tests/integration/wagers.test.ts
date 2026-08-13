@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
+import { summariseConviction } from '@/features/profile'
 import { probeLiveDatabase } from './support/live-env'
 import {
   createLivePlayer,
@@ -315,6 +316,48 @@ describe.skipIf(!live.available)('resolving a wager (live database)', () => {
       Number(((await player.client.rpc('insight_wallet')).data as Record<string, unknown>).balance),
     ).toBe(balanceBefore)
   }, 120_000)
+
+  it('serves the Archive its conviction reading, settled rows only', async () => {
+    /*
+     * The exact query `archive-service.ts` issues for the conviction plate.
+     *
+     * It is worth running live rather than trusting the unit tests, because
+     * every way this can fail is invisible from the client: a withheld column
+     * grant, a filter PostgREST rejects, or an ordering on a nullable column.
+     * All three would degrade the plate to "no stakes settled yet" — a
+     * plausible-looking empty state that is simply a lie.
+     */
+    const { data, error } = await player.client
+      .from('attempt_wagers')
+      .select('stake, was_correct, delta')
+      .eq('player_id', player.id)
+      .not('resolved_at', 'is', null)
+      .order('resolved_at', { ascending: false })
+      .limit(400)
+
+    expect(error).toBeNull()
+    expect(data?.length).toBeGreaterThan(0)
+
+    for (const row of data ?? []) {
+      // Settled means graded. A null here would mean the filter is not doing
+      // what the plate assumes, and the reading would count unfinished stakes.
+      expect(typeof row.was_correct).toBe('boolean')
+      expect(typeof row.delta).toBe('number')
+      expect(row.stake).toBeGreaterThan(0)
+    }
+
+    // The plate's own summary must survive real rows without throwing.
+    const summary = summariseConviction(
+      (data ?? []).map((row) => ({
+        stake: row.stake,
+        wasCorrect: row.was_correct as boolean,
+        delta: row.delta as number,
+      })),
+      60,
+    )
+    expect(summary.sampleSize).toBe(data?.length)
+    expect(summary.netInsight).toBe((data ?? []).reduce((sum, row) => sum + (row.delta ?? 0), 0))
+  }, 60_000)
 
   it('leaves the wager unresolved when the player never staked', async () => {
     const scenario = await loadScenarioForPlay(player, 'hard')

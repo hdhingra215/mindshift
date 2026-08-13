@@ -12,8 +12,8 @@ import { ArchiveScene } from './archive-scene'
  * about loading or failure — the same division the dashboard uses, for the same
  * reason.
  *
- * The waiting state draws the archive's own structure — a masthead rule and five
- * empty plates — rather than grey skeleton bars. The player should see the room
+ * The waiting state draws the archive's own structure — a masthead rule and one
+ * empty plate per section — rather than grey skeleton bars. The player should see the room
  * they are walking into, unlit, instead of rectangles standing in for content
  * that has not arrived (InteractionPrinciples §5).
  */
@@ -43,6 +43,12 @@ export function MindArchiveScreen() {
   return <ArchivePlaceholder />
 }
 
+/**
+ * How many numbered plates the room has, so the unlit version matches it.
+ * Derived from one place because the two drifted the moment a plate was added.
+ */
+const ARCHIVE_PLATES = [1, 2, 3, 4, 5, 6]
+
 /** The room before the lights come up. Same skeleton geometry, no content. */
 function ArchivePlaceholder() {
   return (
@@ -52,7 +58,7 @@ function ArchivePlaceholder() {
         <span className="block h-7 w-64 rounded-full bg-border/30" />
       </div>
 
-      {[1, 2, 3, 4, 5].map((plate) => (
+      {ARCHIVE_PLATES.map((plate) => (
         <div aria-hidden="true" className="flex flex-col gap-4" key={plate}>
           <div className="flex items-baseline gap-3">
             <span className="font-mono text-[10px] tracking-[0.24em] text-muted-foreground/50 tabular-nums">

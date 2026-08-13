@@ -2,11 +2,11 @@
 
 **Read this first.** This is the handoff document for every session. It records what exists, what does not, and what must not be changed. It is implementation state, not narrative.
 
-**Last updated:** 2026-08-12 · **After:** Phase 8.7 (CI + privilege sweep)
+**Last updated:** 2026-08-13 · **After:** Phase 9 (final polish — release-ready)
 
 > ## ✅ Verified against the live database
 >
-> All 25 migrations are applied to `ahychaeoxfyoqodmerud`; types regenerated. `npm run test` runs **182 passing, 0 skipped, 0 failing** — 82 unit and 100 live integration. **CI now runs all of it** (`.github/workflows/ci.yml`, §5.5).
+> All 25 migrations are applied to `ahychaeoxfyoqodmerud`; types regenerated. `npm run test` runs **299 passing, 0 skipped, 0 failing** — 198 unit and 101 live integration. **CI now runs all of it** (`.github/workflows/ci.yml`, §5.5).
 >
 > ## 🔒 Privilege defects: three phases, three shapes
 >
@@ -39,9 +39,10 @@ Read in this order:
 1. This file.
 2. [CLAUDE.md](../../CLAUDE.md) — the constitution. Overrides everything except an explicit user instruction.
 3. [docs/architecture/MotionSystem.md](../architecture/MotionSystem.md) — before touching any animation, styling or UI primitive.
-4. [docs/design/DesignSystem.md](../design/DesignSystem.md) — before touching any colour, spacing or component.
-5. [docs/design/InteractionPrinciples.md](../design/InteractionPrinciples.md) — before designing any interaction, copy or feedback moment.
-6. Product context as needed: [PRD.md](../product/PRD.md), [GameDesign.md](../product/GameDesign.md), [ContentStrategy.md](../product/ContentStrategy.md).
+4. [docs/architecture/AudioSystem.md](../architecture/AudioSystem.md) — before writing any code that makes a sound.
+5. [docs/design/DesignSystem.md](../design/DesignSystem.md) — before touching any colour, spacing or component.
+6. [docs/design/InteractionPrinciples.md](../design/InteractionPrinciples.md) — before designing any interaction, copy or feedback moment.
+7. Product context as needed: [PRD.md](../product/PRD.md), [GameDesign.md](../product/GameDesign.md), [ContentStrategy.md](../product/ContentStrategy.md).
 
 **Verify before trusting.** This document goes stale. Confirm against the repo: `npm run typecheck`, `npm run lint`, `npm run build`, `git status`, `ls supabase/migrations`.
 
@@ -76,6 +77,10 @@ Read in this order:
 | 8.5 | Blind Wagers — Insight economy, wager lifecycle, in-play panel and result | **Uncommitted** |
 | 8.6 | Decision/reveal boundary — correctness is no longer client-visible or client-supplied | **Uncommitted** |
 | 8.7 | CI + privilege sweep — the surface is now enumerated and enforced on every push | **Uncommitted** |
+| 8.8 | The Audio World — one synthesised soundscape: rooms, cues, momentum-reactive ambience | **Superseded by 8.9** |
+| 8.9 | Audio + haptics redesign — recorded environment, material vocabulary, semantic feedback layer | **Uncommitted** |
+| 8.10 | Final haptics pass — stronger patterns, intensity slider, autoplay ceiling documented | **Uncommitted** |
+| 9 | Final polish — Archive conviction plate, Twin chamber room, stale-debt correction | **Uncommitted** |
 
 The 6.2A–D work landed in `688acf7 feat: complete gameplay vertical slice and landing experience`. 6.2E and 7.1 are currently in the working tree.
 
@@ -98,6 +103,7 @@ src/
     world/        environment layer — light, lattice, camera, depth ← barrel
     kokonutui/    migrated third-party components            ← barrel
     charts/       BKLit chart components (installed, UNUSED)
+    feedback/     the mute toggle and the mixer + vibration   ← barrel
     shared/       Logo
   features/
     auth/         complete
@@ -109,6 +115,9 @@ src/
     marketing/    landing page
     profile/      the Mind Archive + the Cognitive Twin          ← barrel
   lib/
+    audio/        materials + the recorded environment       ← barrel
+    haptics/      the only navigator.vibrate in the codebase ← barrel
+    feedback/     the semantic layer components speak to     ← barrel
     motion/       the motion system                          ← barrel
     supabase/     client
     utils/        cn()
@@ -116,7 +125,7 @@ src/
   styles/globals.css   all design tokens + depth/lighting utilities
 supabase/migrations/   22 migrations — schema, seed, XP/mastery/achievements/streaks/twin/wagers
 supabase/functions/    EMPTY — no edge functions yet, and the Twin needs none
-tests/unit/            Vitest — pure client logic (51 tests)
+tests/unit/            Vitest — pure client logic, audio, haptics, feedback (198 tests)
 tests/integration/     Vitest against the live project (54 tests)
 ```
 
@@ -366,7 +375,7 @@ Harmless until Phase 8.5 put Insight on the line. A scripted client could then w
 | `/play` | **Functional** — full loop UI, mastery meter, XP strip, the achievement unlock reveal, a session-end achievement history, the Cognitive Twin's occasional prediction + verdict (§5.3), and the Blind Wager panel + result (§5.4). |
 | `/dashboard` | **The observatory** — one hero object: a lit core with the twelve biases in orbit, where **distance from the core is mastery**. Etched instrument readouts, collected achievement marks, one primary action. Momentum warms the key light and deepens the core's breath — the streak has no card of its own. Read-only against progression; geometry in `features/dashboard/lib/orbit.ts`. |
 | `/profile` | **The Mind Archive** — the player's personal record. Masthead plus five numbered plates: the observatory embedded, evidence of decisions, the full discovery catalogue, reflections as written, and the **live** Cognitive Twin chamber. Read-only. See §5.1 and §5.3. |
-| `/settings` | **Placeholder** — text only. No preferences, no theme control, no data controls. |
+| `/settings` | **Sound and vibration** — three channels plus a haptics switch (§5.7). Theme, notifications and data controls still unbuilt. |
 
 Primary nav labels `/profile` as **Archive** (`nav-items.ts`, `user-menu.tsx`). The path stays `/profile` — renaming a route is a redirect problem, not a naming one.
 
@@ -374,7 +383,7 @@ Primary nav labels `/profile` as **Archive** (`nav-items.ts`, `user-menu.tsx`). 
 
 `src/features/profile/`. The empty barrel became the implementation; no new feature was created.
 
-**What it is.** The place the evidence of a player's thinking is kept — deliberately *not* a profile page. No avatar block, no editable fields, no account furniture; those belong to `/settings`. Structure, top to bottom: `00` masthead · `01` Mind Observatory · `02` evidence of decisions · `03` discoveries · `04` reflections · `05` Cognitive Twin. The order moves from the system's account of the player to the player's own.
+**What it is.** The place the evidence of a player's thinking is kept — deliberately *not* a profile page. No avatar block, no editable fields, no account furniture; those belong to `/settings`. Structure, top to bottom: `00` masthead · `01` Mind Observatory · `02` evidence of decisions · `03` **conviction** · `04` discoveries · `05` reflections · `06` Cognitive Twin. The order moves from the system's account of the player to the player's own.
 
 **It reuses rather than re-derives.**
 - `fetchObservatoryScene` and `MindObservatory` are imported from the dashboard barrel (newly exported for this). The archive's mastery plate *is* the dashboard's instrument, seen up close — one read, one geometry, two vantage points. A second set of near-identical queries would have produced two pictures of mastery that could disagree.
@@ -397,6 +406,20 @@ Primary nav labels `/profile` as **Archive** (`nav-items.ts`, `user-menu.tsx`). 
 **Theme.** Dark only. `defaultTheme="dark"`, `enableSystem={false}` in `app/providers/theme-provider.tsx`. Light-theme tokens are fully authored in `globals.css` but no UI switches to them.
 
 **Charts.** `src/components/charts/` (BKLit) is installed and token-themed but **imported by nothing.** It exists for the future analytics/profile work. Do not delete it; do not use it on marketing surfaces.
+
+### 5.2 Conviction (Phase 9) — the wager's Archive surface
+
+`features/profile/components/conviction-panel.tsx` + `summariseConviction` in `lib/evidence.ts`. Plate `03`, directly after the evidence it reinterprets.
+
+**The gap it closed.** `attempt_wagers` had been recording stake, correctness and delta since 8.5 and **nothing read it** — the one system in the product collecting data no surface consumed (§11).
+
+**It reports exactly one comparison:** how often the player is right when they stake Insight, against how often they are right overall. A staked accuracy alone measures nothing — 80% is a finding against a 60% baseline and a shortfall against 95% — so the *difference* is the reading, and the unit suite asserts that the same staked rate is described differently against different baselines.
+
+**Sample discipline is the strictest in the archive.** `MIN_CONVICTION_SAMPLE` is 6, above the calibration floor of 5, because this compares two rates rather than describing one. Per-tier accuracy is withheld below 3 settled wagers at that tier and the hairline draws nothing rather than drawing a confident line over two decisions. Net Insight is always exact — it is a ledger fact, not a pattern claim.
+
+**What it refuses to be.** No streaks, no biggest win, no roll. This is the surface most at risk of drifting into a betting history, and the mechanic's own rules forbid it (§5.4). The copy tests assert the absence of both scolding vocabulary and gambling vocabulary, the same negatives `lib/twin.ts` holds itself to.
+
+**Read.** One added query in `archive-service.ts`: settled wagers only (`resolved_at not null`), bounded by `WAGER_WINDOW` = 400, degrading to an empty reading rather than failing the archive. **Proved against the live database** — `wagers.test.ts` runs the archive's exact query and asserts the rows come back graded, because a withheld column grant or a rejected filter would degrade to a plausible-looking "no stakes settled yet" that is simply a lie.
 
 ### 5.3 The Twin's two surfaces (Phase 8.4)
 
@@ -477,6 +500,46 @@ It also corrected a documentation error: `evaluate_achievements`, `refresh_playe
 
 ---
 
+### 5.7 Audio & Haptics (Phase 8.8, redesigned in 8.9, haptics rebuilt in 8.10)
+
+`src/lib/audio/` · `src/lib/haptics/` · `src/lib/feedback/` · `src/components/feedback/`. **Read [AudioSystem.md](../architecture/AudioSystem.md) before touching any of it** — this section is the state, that file is the contract.
+
+⚠ **8.9 replaced the sound design wholesale on the owner's judgement.** The 8.8 system was synthesised end to end; the environment read as a fan and the discrete cues read as generic UI clicks. Three layers now:
+
+| Layer | Owns |
+|---|---|
+| `lib/audio` | Nine **materials**, the Web Audio graph, and the recorded environment |
+| `lib/haptics` | Seven patterns, and **the only `navigator.vibrate` in the codebase** |
+| `lib/feedback` | The **moment table** — which acts are worth marking, and how hard |
+
+**Components import `@/lib/feedback` and nothing below it.** They name an act (`signal('answer.commit')`), never a sound or a vibration. That seam is why 8.9 replaced every sound in the product without changing a single call site.
+
+**The environment is a recording, not oscillators.** A CC0 texture (`src/assets/sounds/LICENSE.md` — provenance, licence and the exact rebuild command), 157 kB as a separate hashed asset, fetched only when a room is first declared. **JS cost of the whole system: +1.8 kB gzip over 8.8.** Rooms are filters over one looping source, so duplicate ambience is structurally impossible — `bedCount()` is asserted to stay at 1.
+
+**It starts when the page opens.** The context is built at mount and resumed immediately; where the autoplay policy refuses, the first real interaction resumes it. No silent-buffer trick and no muted-`<video>` shim — the policy is honoured, not defeated.
+
+**Sound marks consequence, never traversal.** `Button` makes no sound by default; navigation has no cue at all, because each room sounds different and the retune *is* the feedback. The gradient — hover → choose → commit → reveal → consequence — is the interaction language.
+
+⚠ **Invariants asserted in the unit suite; do not relax them.** Momentum may change openness and space but never level or rate. `shade`/`bloom`, `wager.win`/`wager.loss` and `twin.hit`/`twin.miss` carry identical weight in both channels. Every material sits between −24 and −6 dBFS at default preferences. No sustained pitch exists in the catalogue. `navigator.vibrate` appears in exactly one file.
+
+**Landing page.** The torch sweep is bound to pointer movement with a 1.6 s moment throttle; the decision gets hover feedback, a commitment, and a phrased reveal; the loop rail fires one pulse per stop crossed, driven by a `MotionValue` subscription rather than React state.
+
+**8.10 — haptics only. Not one audio value changed.** The patterns were 2–3× too weak to feel (pulses as short as 4 ms), so the ceiling moved from 60 ms to 90 ms of motor time and every pattern was given a distinct *shape* — single, rising, falling, symmetrical, crescendo — rather than a distinct length. All 21 moments now carry a haptic, including navigation (`route.change`, **felt but still silent**). A `hapticIntensity` slider scales pulse durations while holding the gaps, with an 8 ms perceptibility floor; Settings gained it plus a reset-to-defaults.
+
+⚠ **The hardware truth, and it is not a bug to be fixed.** `navigator.vibrate` is **not implemented in Safari on iOS or macOS, in any version**, and Firefox removed it in 129. There is no web API for the iPhone Taptic Engine or a Mac trackpad. Everything in this section is real on Android and a clean no-op everywhere else; the Settings copy says so. Reaching Apple's haptics needs a native wrapper — a product decision, not an implementation gap.
+
+⚠ **Autoplay has a ceiling too.** The context is built and resumed at mount, unprompted, and `getAutoplayPolicy()` is consulted where it exists so the mute control can say *waiting for your first tap* rather than looking broken. But truly automatic first-visit playback is impossible in Chrome, Safari and Firefox by design. A returning Chrome visitor usually gets the room on open (media-engagement history); a first-time visitor gets it on their first click. **No silent-buffer or muted-`<video>` workaround is used, and none may be added** (AudioSystem.md §3).
+
+**Haptics** are Android/Chromium only in practice — absent on iOS and desktop — so the API is a no-op returning `false` everywhere else, and nothing depends on one firing. Mute outranks the haptics switch, and reduced motion suppresses them entirely.
+
+⚠ **A latent bug the tests found:** all three throttles used `0` as the "never fired" sentinel, so every throttled moment was silently dead for its own duration after page load — exactly when a visitor first touches things. The sentinel is now `-Infinity` in all three layers.
+
+**Cost.** No new render or animation loop. Every ambience change is an `AudioParam` ramp on the audio thread.
+
+**Deferred to Phase 9** (§8.17–8.19): the Archive's Twin chamber does not take the twin room; the mixer has no reset-to-defaults; there is no rendered-component test coverage for the feedback wiring (the current checks are structural — see `tests/unit/feedback.test.ts`).
+
+---
+
 ---
 
 ## 6. Motion system
@@ -518,13 +581,13 @@ Reduced motion is enforced in two layers — CSS for declarative animation, `lib
 
 Ordered by how much it will cost to leave.
 
-1. **Three phases of progression SQL have never run.** 7.1 (XP) is deployed and verified live; **7.2 (mastery) and 7.3 (achievements) are authored but unapplied** — no Docker for a local Postgres, and pushing to the live project is the owner's call. Apply them, regenerate types, and run the gameplay harness before building on top. Everything client-side is verified; the SQL is not.
-2. **No CI, and no e2e.** 105 tests pass and nothing runs them automatically, so they protect only the developer who remembers to type `npm run test`. This is now the single highest-value piece of work left — the 8.4 security fix in particular is the kind of thing a regression would silently undo. `tests/e2e` is still empty. Pair with debt #7.
+1. ~~Three phases of progression SQL have never run.~~ **Stale, corrected in Phase 9.** All 25 migrations are applied and verified against the live project; 100 live integration tests exercise them on every push. This entry described the state at 7.3 and was never updated.
+2. **No e2e coverage.** `tests/e2e` is empty. CI *is* in place (§5.5) — the "no CI" half of this entry was stale and is corrected. What remains is that nothing drives a real browser, so every assertion about rendered behaviour is either a unit test over pure logic or a structural check (debt #18). This is the largest remaining gap and the natural next investment.
 3. **PostgREST embed cardinality is an invisible schema coupling.** Adding or dropping a UNIQUE constraint on a foreign key silently changes an embed between an object and an array. `scenario-row.ts` is immune (`embeddedOne`/`embeddedMany` accept both), but any future query written elsewhere is not. Prefer those combinators over hand-typed embeds.
 4. **33 lint warnings, 0 errors.** Almost all `react/only-export-components`, split between TanStack route files (unavoidable — a route module must export `Route`) and vendored BKLit chart code. Do not "fix" the route files. Do not let the count grow from new hand-written code — 8.2 added none.
 5. **Two deliberate duplications, both documented in place.** Motion tokens (`src/lib/motion/tokens.ts` ↔ `globals.css`) and the mastery tier ladder (`src/features/mastery/constants.ts` ↔ `public.mastery_tier_floor`). Both are intentional — the alternative is a round trip per rendered meter — and both can drift. Change each pair together.
 6. **`auth` bundle chunk is 390 kB** (107 kB gzip), the largest by far — it carries the Supabase client. Not addressed; revisit when performance work begins.
-7. **No CI.** `.github/` exists but no workflow enforces typecheck/lint/build.
+7. ~~No CI.~~ **Stale, corrected in Phase 9.** `.github/workflows/ci.yml` has enforced typecheck, lint, build, unit and live tests since 8.7 (§5.5). This entry was a duplicate of the stale half of #2.
 8. **A failed award is never retried later.** `awardAttemptXp` retries twice in-request, then gives up and hides the reward strip. The attempt row survives and the award is idempotent, so nothing is lost — but nothing reclaims it either. A reconciliation pass (award any attempt with no ledger row, on session start) is the fix.
 9. **Generated types must be regenerated by hand.** `src/types/database.types.ts` is checked in and the client is typed against it, but nothing enforces that it matches the migrations. A CI step running `supabase gen types` and failing on a diff would close this.
 10. **Achievement XP is absent from session XP.** `refresh_session_rollups` traces ledger rows to a session through an attempt, and an achievement is not attached to one. Total XP is correct; the session strip understates. Linking them is a schema change and was deliberately not made.
@@ -534,6 +597,11 @@ Ordered by how much it will cost to leave.
 14. **The archive's decision window is a client-side cap, not pagination.** `DECISION_WINDOW = 400` in `api/archive-service.ts` bounds the pattern summaries. It is honest (`decisionsTruncated` drives the copy) but it is still 400 rows over the wire for a heavy player. The real fix is a server-side rollup — which is what `refresh_player_statistics` was always going to be, so fold it in there rather than paginating the client.
 15. **Achievement XP is invisible to the session strip — now measured.** A first correct answer unlocks *First Insight* (50 XP) and *Caught in the Act* (75 XP), so a 20 XP attempt produces a 145 XP total across three ledger rows. `progress.total_xp` is correct; `sessions.total_xp_earned` shows 20, because `refresh_session_rollups` reaches the ledger through an attempt and an achievement has none (debt #10). Both behaviours are now asserted, so the gap cannot widen silently.
 16. **No profile bootstrap trigger.** There is no trigger on `auth.users`; `profiles` rows are created client-side by `ensureProfile` on sign-in. Every progression table FKs to `profiles`, so a player whose bootstrap silently failed cannot record an attempt at all. The harness exercises the same upsert path, so a broken `profiles_insert_own` policy would now surface — but a trigger would be strictly more robust than a swallowed client retry.
+
+17. ~~The Archive's Twin chamber does not take the twin room.~~ **Closed in Phase 9.** The chamber declares `twin` while it is in view via the existing `useInViewRef`, and withdraws when it scrolls away. `useSoundscape` now accepts `null` — *make no claim on the room*, distinct from `'silent'`, which claims it and asks for quiet. No sound changed.
+18. **Feedback wiring has no rendered-component coverage.** `tests/unit/feedback.test.ts` asserts the wiring by reading component source, which catches the real failure (someone deletes the call) but is structural rather than behavioural. There is no DOM testing library in the project; fold this into the e2e work (debt #2).
+19. ~~The mixer has no reset.~~ **Closed in 8.10** — Settings has reset-to-defaults.
+20. **Sound and haptics default to on.** Nothing plays before the browser permits it and mute is in the top bar at every breakpoint, so this is defensible — but it is an owner-level product call, and it is exactly one constant (`DEFAULT_MIX` in `lib/audio/tokens.ts`).
 
 **Recently cleaned (do not reintroduce):** a stray literal `@/` directory and a duplicate `src/lib/utils.ts` — both created by `shadcn add` writing to an unresolved alias. After any `shadcn add`, run `git status` and check for a top-level `@/` directory.
 
@@ -549,6 +617,7 @@ Unresolved. Do not silently pick one — surface it.
 - **Guest play before signup.** PRD open question. The landing-page teaser is currently the entire unauthenticated play experience.
 - **Streaks in MVP.** *Resolved in 8.1.* Shipped as **momentum** — no counter, no badge, no calendar. A day counts on ≥2 decisions or ≥1 reflection; grace is always on; the run warms the world rather than appearing as a number. **Still open:** whether the qualifying bar (2 decisions) is right, and player timezone.
 - **Light theme.** Tokens are authored; shipping it is not scheduled.
+- **Whether sound and haptics are on by default.** *Shipped on* in 8.8, kept in 8.9 — quiet, never before the browser permits it, one press from off, and remembered. Flipping it is one constant (debt #20). Owner's call.
 - **Reflection prompts.** `reflections.prompt` is persisted but no prompt library is authored.
 - **Whether BKLit charts ship at all.** The Mind Archive was the surface they were installed for, and 8.2 did not use them: the archive's readings are etched instrument lines and hairline tracks, which fit the world layer where a charting library would have imported a second visual language. `src/components/charts/` is therefore still dead weight in the tree (~7 files, imported by nothing). Either a future analytics surface justifies it or it gets deleted — do not resolve this by retrofitting charts into the archive.
 - **The Cognitive Twin's source of truth.** `ArchiveRecord` is its input contract, but nothing is decided about *where the inference runs*. It must not be a client-side derivation (that would make the archive assert something nothing computed). Edge function versus a stored, server-computed analysis is open, and it shares the unresolved provider/guardrail questions with AI explanations above.
@@ -576,20 +645,36 @@ Ordered by dependency, not by ambition.
 
 **`refresh_player_statistics` was deliberately not written.** The Archive does not need it — every number it shows comes from `progress`, `bias_mastery`, `player_achievements`, `streaks` or its own descriptive summaries. Writing it now would be an analytics rollup nothing consumes. Revisit only when the 400-row decision window (§8.12) actually hurts.
 
-### Phase 8.8 — Archive surfaces for wager and Twin
+### Phase 9 is done. The product is release-ready.
 
-**8.7 is done.** CI runs typecheck, lint, build, 82 unit and 100 live tests on every push, and the privilege sweep enumerates the surface so the defect class that shipped three times cannot ship a fourth time silently.
+Every item this document reserved for Phase 9 is closed:
 
-Next is the first phase in a while that is purely product. Two systems are collecting data nothing reads:
+| Reserved work | Outcome |
+|---|---|
+| **Wager conviction in the Archive** | Shipped — plate `03` (§5.2) |
+| **Twin chamber room** (debt #17) | Closed — in-view declaration |
+| Stale debt #1, #2, #7 | Corrected; they described a pre-8.7 world |
+| Mixer reset (debt #19) | Closed in 8.10 |
 
-- **Wager conviction.** `attempt_wagers` holds stake, `balance_before`, correctness and delta per scenario — enough for accuracy by stake size, and for the confidence-vs-conviction comparison the Archive was designed around (§4.7). The sample-size discipline of §4.6 applies: no claim below the floor.
-- **Twin narration.** `TwinPattern.narration` is the declared, always-null boundary for a language layer (§4.6). It would be the first genuine use of an edge function, and the open decision in §9 — *where the inference runs* — has to be settled first. It must not be a client-side derivation.
+⚠ **Twin narration was deliberately not built.** `TwinPattern.narration` stays the declared, always-null boundary it has been since 8.4. It needs an edge function and the open decision in §9 — *where the inference runs* — settled first, and it must never be a client-side derivation. Shipping a language layer as final-phase polish would have been the worst possible time to make that call.
 
-**Then.** `frame` labels on choices (debt #11) · Settings · adaptive difficulty · e2e coverage (debt #2).
+### What ships, and what is knowingly deferred
 
-**Out of scope.** Sound/game feel, Phase 9.
+**Ships.** Landing page · auth (email + password, verification, reset) · the game loop with server-authoritative XP, mastery, achievements and streaks · Blind Wagers · the Cognitive Twin · the observatory dashboard · the Mind Archive with six plates · sound and haptics with full preferences · CI with a privilege sweep over the live database.
 
-**Before starting.** Run `npm run test`. If the sweep fails on something you added, classify it — that is the sweep working.
+**Knowingly deferred, none of it blocking:**
+
+- **e2e coverage** (debt #2) — the largest remaining gap. Nothing drives a real browser.
+- **Account deletion and data export.** The PRD lists both before a public launch. `/settings` owns sound and haptics only. **This is the one item that is a launch requirement rather than an improvement** — it is a legal/product obligation, not a polish task, and it needs an owner decision about scope before it is built.
+- **Light theme** — tokens authored, not shipped. Dark only, deliberately.
+- **Adaptive difficulty, spaced repetition, AI explanations, `frame` labels** — roadmap, all documented, none required for the loop to be complete.
+- **`components/charts/`** — still imported by nothing. Phase 9 did **not** resolve this: the conviction plate is an analytics surface and was the obvious excuse to retrofit BKLit into it, which §9 explicitly forbids. It stays an owner decision — delete it or justify it, but do not retrofit it.
+
+### Before shipping
+
+1. `npm run test` — 299 green, 0 skipped.
+2. Nothing in this repository is committed past `1753e96`. **Phases 6.2E through 9 are all in the working tree.** That is the single most urgent operational risk on the project and it is an owner action, not a code change.
+3. Confirm the owner-level product calls still stand: sound and haptics default **on** (debt #20), dark theme only, guest play still unresolved (§9).
 
 ---
 
@@ -621,6 +706,16 @@ These are settled. Changing one requires explicit user agreement, and any reques
 12. **Components read semantic tokens. Zero raw hex, zero magic numbers.**
 13. **Glow is a depth cue, not decoration.** On black, light is the primary elevation signal — but a screen with many glowing elements has no focal point.
 14. **One primary action per screen.**
+
+### Audio
+14b. **Three layers, one entry point.** Components import `@/lib/feedback` and name *acts*, never sounds or vibrations. `new AudioContext` and `navigator.vibrate` each appear in exactly one file, asserted by a test. Adding an audio library or a second asset format is a stack change (CLAUDE.md §3).
+14c. **One action, one layered cue.** Never two cues for one act — add a layer to the existing material instead. Simultaneous surfaces are spaced with the `PHRASE` ladder.
+14g. **The environment is a recording; the materials are struck, not played.** Never synthesise the bed (8.8 did, and it sounded like a fan) and never write a sustained pitch into the catalogue (8.8 did, and it sounded like an interface).
+14h. **Mark consequence, not traversal.** Hover, navigation and ordinary buttons are silent. `Button` has no default sound.
+14d. **Momentum resolves the world, never raises it.** A run may change timbre and tuning; it may never change a level or a rate. Asserted per-room in the unit suite.
+14e. **A miss, a shortfall and a Twin's error are the same size of sound as their counterparts.** The audio half of §12.20 — asserted, and not to be weakened.
+14f. **Audio starts as early as the browser legally permits and no earlier**, and mute — one press away at every breakpoint — silences sound *and* haptics. Never fake autoplay; if the room cannot start, the interface says so.
+14i. **Never claim a haptic the platform cannot deliver.** iOS and macOS have no web vibration API at all. Copy and docs must say so rather than implying the feature is merely subtle.
 
 ### Motion
 15. **Anime.js for time-driven, Motion for scroll/viewport/gesture. No third library, no duplicated effect.**

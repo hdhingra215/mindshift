@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AchievementHistory, type AchievementUnlock } from '@/features/achievements'
+import { useSignalOnMount } from '@/lib/feedback'
 
 type SessionSummaryProps = {
   completedCount: number
@@ -19,6 +20,10 @@ export function SessionSummary({
   sessionXp,
   onPlayAgain,
 }: SessionSummaryProps) {
+  // The session settling closed. A resolve, not a fanfare — the summary is a
+  // calm end, and §12.22 rules out celebrating a player for stopping.
+  useSignalOnMount('surface.reveal')
+
   const played = completedCount > 0
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-5 py-10 text-center">

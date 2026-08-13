@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 
 import { RevealContainer } from '@/components/motion'
 import { InstrumentFrame } from '@/components/world'
+import { PHRASE, useSignalOnMount } from '@/lib/feedback'
 import { ANIME_EASE, DURATION, animate, useReducedMotion } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
@@ -36,6 +37,13 @@ export function WagerResult({ outcome }: WagerResultProps) {
   const { eyebrow, movement, line } = describeWagerResult(outcome)
   const balanceRef = useRef<HTMLSpanElement>(null)
   const reduced = useReducedMotion()
+
+  /*
+   * Second in the reveal phrase, behind the outcome. Both settlements are the
+   * same event in two colours — same length, same level — for exactly the
+   * reason the styling is: nothing went wrong when a stake falls short.
+   */
+  useSignalOnMount(outcome.wasCorrect ? 'wager.win' : 'wager.loss', { delayMs: PHRASE.second })
 
   useEffect(() => {
     const node = balanceRef.current

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 
+import { signal } from '@/lib/feedback'
 import { useCursorGlow, useReducedMotion, ambientMotionAllowed } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
@@ -50,6 +51,21 @@ export function HeroLens({ className }: HeroLensProps) {
     <div className={cn('flex flex-col items-center gap-6', className)}>
       <div
         className="relative isolate w-full max-w-4xl"
+        /*
+         * The torch catching the line.
+         *
+         * Bound to pointer *movement over the words*, not to entering the box,
+         * because the light is only doing anything while it is being dragged
+         * across the sentence. The moment carries a long throttle (see
+         * `moments.ts`), so a cursor swept back and forth produces an
+         * occasional sense of something catching the light rather than a
+         * stream of noise — which is the difference between atmosphere and the
+         * most annoying possible interaction on the page.
+         */
+        onPointerMove={(event) => {
+          if (!lensActive || event.pointerType !== 'mouse') return
+          signal('torch.sweep')
+        }}
         ref={ref}
         style={
           {
@@ -104,7 +120,12 @@ export function HeroLens({ className }: HeroLensProps) {
           'transition-colors duration-[var(--motion-fast)] ease-[var(--ease-move)]',
           'hover:border-brand/40 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none'
         )}
-        onClick={() => setIsRevealed((current) => !current)}
+        onClick={() => {
+          // Turning the light on deliberately is a different act from sweeping
+          // it, so it gets the larger of the two: the whole space opening.
+          signal('torch.toggle')
+          setIsRevealed((current) => !current)
+        }}
         type="button"
       >
         {isRevealed

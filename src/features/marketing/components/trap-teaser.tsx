@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, CornerDownRight } from 'lucide-react'
 
 import { HoverGlow, RevealContainer } from '@/components/motion'
+import { PHRASE, signal, useSignalOnMount } from '@/lib/feedback'
 import {
   ANIME_EASE,
   DURATION,
@@ -104,8 +105,17 @@ export function TrapTeaser({ onResolve, outcome, className }: TrapTeaserProps) {
     }
   }, [isResolved])
 
+  /*
+   * This control commits in a single click — there is no separate submit — so
+   * the two beats the pipeline asks for are *hover* and *commit* rather than
+   * select-then-submit. Hovering an option is the selection feedback (a graze,
+   * no vibration); clicking it is the commitment, and gets the same seating
+   * mechanism the real game gives a locked answer. Firing a select *and* a
+   * commit a few milliseconds apart would be two sounds for one act.
+   */
   const handleChoose = (choice: TeaserChoice) => {
     if (isResolved) return
+    signal('answer.commit')
     onResolve({ choice, caught: choice.isCatch })
   }
 
@@ -164,6 +174,13 @@ export function TrapTeaser({ onResolve, outcome, className }: TrapTeaserProps) {
                     )}
                     disabled={isResolved}
                     onClick={() => handleChoose(choice)}
+                    onFocus={() => {
+                      if (!isResolved) signal('choice.hover')
+                    }}
+                    onPointerEnter={(event) => {
+                      if (isResolved || event.pointerType !== 'mouse') return
+                      signal('choice.hover')
+                    }}
                     type="button"
                   >
                     <span
@@ -207,6 +224,15 @@ export function TrapTeaser({ onResolve, outcome, className }: TrapTeaserProps) {
  * rather than praising or blaming the person.
  */
 function TeaserVerdict({ outcome, reduced }: { outcome: TeaserOutcome; reduced: boolean }) {
+  /*
+   * The consequence, one beat behind the commitment. Caught and missed are the
+   * same size of event in both channels — the panel's own copy calls a miss
+   * "as designed", and the feedback must not argue with it.
+   */
+  useSignalOnMount(outcome.caught ? 'outcome.correct' : 'outcome.miss', {
+    delayMs: PHRASE.second,
+  })
+
   return (
     <RevealContainer
       className="mt-4 rounded-2xl border border-border bg-elevated/70 p-6 depth-overlay backdrop-blur-sm sm:p-8"

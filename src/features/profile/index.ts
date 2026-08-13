@@ -7,8 +7,9 @@
  * controls, and none of that furniture belongs in here.
  *
  * Read-only with respect to progression, exactly like the observatory it embeds.
- * The one thing this feature derives is descriptive: tempo, calibration and
- * difficulty spread, all confined to `lib/evidence.ts` and covered by tests.
+ * The one thing this feature derives is descriptive: tempo, calibration,
+ * difficulty spread and conviction, all confined to `lib/evidence.ts` and
+ * covered by tests.
  *
  * Also owns the **Cognitive Twin** (Phase 8.4) — a model of how this player
  * decides, inferred server-side from their own recorded decisions. The client
@@ -36,15 +37,21 @@ export {
 } from './lib/twin'
 export {
   MIN_CALIBRATION_SAMPLE,
+  MIN_CONVICTION_SAMPLE,
+  describeConviction,
   formatDeliberation,
+  formatInsightMovement,
   formatFamilyMastery,
   formatShare,
   masteryDistribution,
   standingsByFamily,
   strongestKnown,
   summariseCalibration,
+  summariseConviction,
   summariseDecisions,
   type CalibrationSummary,
+  type ConvictionBand,
+  type ConvictionSummary,
   type DecisionSummary,
   type DifficultyBand,
   type FamilyStanding,
@@ -56,6 +63,7 @@ export type {
   ArchiveLoad,
   ArchiveRecord,
   ArchiveReflection,
+  ArchiveWager,
   CognitiveTwinSlot,
   TwinContextKind,
   TwinPattern,

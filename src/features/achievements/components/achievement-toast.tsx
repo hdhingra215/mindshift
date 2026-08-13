@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 
+import { signal } from '@/lib/feedback'
 import { ANIME_EASE, DURATION, TRAVEL, animate, prefersReducedMotion } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
@@ -49,6 +50,14 @@ export function AchievementToast({ queue, onDismiss, className }: AchievementToa
   useEffect(() => {
     const node = cardRef.current
     if (!node || !current) return
+
+    /*
+     * The bell, once per unlock — announced by the reveal itself rather than by
+     * the award, so a queued second achievement sounds when it actually
+     * appears. It survives reduced motion: the sound is not the animation, and
+     * a milestone the player earned should still be marked.
+     */
+    signal('reward.achievement')
 
     if (prefersReducedMotion()) {
       // Present, immediately, with no travel. The reveal never depended on it.

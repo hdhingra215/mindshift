@@ -6,6 +6,7 @@ import { DepthPlane, InstrumentFrame, useWorldWarmth } from '@/components/world'
 import { resolveAchievementIcon } from '@/features/achievements'
 import { formatMastery } from '@/features/mastery'
 import { describeMomentum, momentumOf } from '@/features/streaks'
+import { PHRASE, useSignalOnMount, useSoundscape } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
 import { unlitCount, weakestKnown } from '../lib/orbit'
@@ -46,6 +47,18 @@ export function ObservatoryScene({ scene, displayName, greeting }: ObservatorySc
    * them to the next route instead of resetting at the door.
    */
   useWorldWarmth(momentum)
+
+  /*
+   * And the audible half of the same declaration. The room does not get louder
+   * with a longer run — it resolves: the fifth arrives, the two body voices stop
+   * beating against each other, and the filter opens a little. Warmth you can
+   * hear, on exactly the scalar the light already reads.
+   */
+  useSoundscape('observatory', momentum)
+
+  // A run continuing is worth one low swell on arrival, and nothing else. No
+  // counter, no fanfare — the same restraint the visual side holds to.
+  useSignalOnMount('reward.momentum', { delayMs: PHRASE.third, enabled: momentum > 0 })
 
   return (
     <div className="relative flex flex-col items-center gap-10 py-4 sm:gap-12">

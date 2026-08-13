@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { AnimatedSection, ParallaxLayer, RevealContainer } from '@/components/motion'
 import { useAuth } from '@/features/auth'
+import { useSoundscape } from '@/lib/feedback'
 
 import { HERO_LEAD, HERO_SUPPORT, TEASER_BIAS_SLUG } from '../constants'
 import type { TeaserOutcome } from '../types'
@@ -39,6 +40,16 @@ import { TrapTeaser } from './trap-teaser'
  * is a demonstration, and the real progress model lives behind an account.
  */
 export function LandingPage() {
+  /*
+   * The landing page is the first room a visitor stands in, so it gets the
+   * observatory — the same bed the dashboard runs, at its resting tuning since
+   * there is no run to read yet. Leaving it silent (as the first cut did) meant
+   * the one surface that has to demonstrate the world was the only one with no
+   * world to hear. Nothing plays before the visitor's first interaction, which
+   * is what makes this safe rather than hostile.
+   */
+  useSoundscape('observatory')
+
   const { status } = useAuth()
   const isAuthed = status === 'authenticated'
 

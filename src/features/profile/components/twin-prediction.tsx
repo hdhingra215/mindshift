@@ -1,5 +1,6 @@
 import { InstrumentFrame } from '@/components/world'
 import { RevealContainer } from '@/components/motion'
+import { useSignalOnMount, useSoundscape } from '@/lib/feedback'
 
 import { describePrediction, describePredictionEvidence } from '../lib/twin'
 import type { TwinPrediction } from '../types'
@@ -24,6 +25,15 @@ type TwinPredictionCardProps = {
  * always visible, and nothing here hints at which choice is correct.
  */
 export function TwinPredictionCard({ prediction }: TwinPredictionCardProps) {
+  /*
+   * The Twin takes the room while it is speaking and hands it straight back.
+   * The bed underneath — play, usually — is untouched; the declaration stack
+   * simply prefers the newer one, so the environment goes sparse and synthetic
+   * for as long as there is a prediction on screen and returns on its own.
+   */
+  useSoundscape('twin')
+  useSignalOnMount('twin.speak')
+
   return (
     <RevealContainer className="mx-auto w-full max-w-2xl" delay={120} distance="sm" duration="slow">
       <InstrumentFrame as="aside" className="px-5 py-4" legend="Your Twin">

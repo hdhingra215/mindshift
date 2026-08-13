@@ -3,6 +3,7 @@ import { Check, Lock } from 'lucide-react'
 import { RevealContainer } from '@/components/motion'
 import { InstrumentFrame } from '@/components/world'
 import { Button } from '@/components/ui/button'
+import { signal } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
 import {
@@ -112,7 +113,13 @@ export function WagerPanel({
                 )}
                 disabled={!enabled || isLocked || isLocking}
                 key={tier}
-                onClick={() => onSelectStake(isSelected ? null : tier)}
+                onClick={() => {
+                  // A detent on a dial: dry, mechanical, no pitch to speak of.
+                  // Selecting and clearing feel identical, because they are the
+                  // same act — moving the dial, not winning anything.
+                  signal('wager.select')
+                  onSelectStake(isSelected ? null : tier)
+                }}
                 role="radio"
                 type="button"
               >
@@ -143,6 +150,9 @@ export function WagerPanel({
               disabled={!enabled || selectedStake === null || isLocking}
               onClick={onLock}
               size="lg"
+              // The same weight as committing an answer, because staking
+              // Insight is the same kind of act: a thing you cannot take back.
+              moment="wager.commit"
               type="button"
             >
               <Lock aria-hidden="true" className="size-4" />

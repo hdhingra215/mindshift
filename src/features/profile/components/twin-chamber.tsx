@@ -1,4 +1,6 @@
 import { InstrumentFrame } from '@/components/world'
+import { useSoundscape } from '@/lib/feedback'
+import { useInViewRef } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
 import { describePattern, describeTwinStatus, summariseTwinAccuracy } from '../lib/twin'
@@ -29,7 +31,32 @@ type TwinChamberProps = {
  * server-computed facts, and `pattern.narration` is the declared slot for a
  * future language layer that does not exist yet.
  */
-export function TwinChamber({ twin, decisionCount, reflectionCount }: TwinChamberProps) {
+export function TwinChamber(props: TwinChamberProps) {
+  /*
+   * The chamber takes the room while it is on screen, and gives it straight
+   * back (ProjectStatus §8.17 — deferred from 8.9, closed here).
+   *
+   * It has to be in-view rather than mounted, because unlike the prediction
+   * card in play this plate exists for the whole life of the page: declaring on
+   * mount would hold the entire Archive in the Twin's bed. `null` withdraws the
+   * declaration rather than claiming silence, so the archive room underneath
+   * simply resumes.
+   *
+   * `once: false` because this is a state, not a reveal — scrolling away has to
+   * hand the room back.
+   */
+  const [ref, inView] = useInViewRef<HTMLDivElement>({ once: false, amount: 0.35 })
+  useSoundscape(inView ? 'twin' : null)
+
+  return (
+    <div ref={ref}>
+      <ChamberFace {...props} />
+    </div>
+  )
+}
+
+/** The chamber's three faces. Which one renders is decided by the slot type. */
+function ChamberFace({ twin, decisionCount, reflectionCount }: TwinChamberProps) {
   if (twin.status === 'sealed') {
     return <SealedChamber twin={twin} decisions={decisionCount} reflections={reflectionCount} />
   }

@@ -44,6 +44,8 @@ This document is the permanent source of truth for how MindShift is built. Claud
 | Components | shadcn/ui |
 | Routing | TanStack Router (file-based) |
 | Animation | Anime.js (primary engine) + Motion (scroll / viewport / gestures) |
+| Audio | Web Audio API — synthesised materials + one CC0 recording, no library |
+| Haptics | Vibration API — centralized, no library |
 | UI add-ons | KokonutUI · BKLit Charts |
 | Backend | Supabase — Auth, PostgreSQL, Storage, Row Level Security |
 | Hosting | Vercel |

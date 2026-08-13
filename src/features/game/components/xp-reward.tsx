@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { PenLine, Sparkles } from 'lucide-react'
 
+import { PHRASE, useSignalOnMount } from '@/lib/feedback'
 import { useCountTo, useReducedMotion } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
@@ -39,6 +40,9 @@ function fillFraction(xpIntoLevel: number, span: number | null): number {
  */
 export function XpReward({ award, reflectionXp, className }: XpRewardProps) {
   const reduced = useReducedMotion()
+  // Last in the phrase, and the quietest cue in the catalogue. XP is
+  // scaffolding; it must not out-sound the thing it sits under.
+  useSignalOnMount('reward.xp', { delayMs: PHRASE.tail })
   const amountRef = useRef<HTMLSpanElement>(null)
   const sessionRef = useRef<HTMLSpanElement>(null)
 

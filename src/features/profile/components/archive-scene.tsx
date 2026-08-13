@@ -4,9 +4,11 @@ import { ArrowRight } from 'lucide-react'
 import { MagneticButton, RevealContainer } from '@/components/motion'
 import { DepthPlane, useWorldWarmth } from '@/components/world'
 import { describeMomentum, momentumOf } from '@/features/streaks'
+import { useSoundscape } from '@/lib/feedback'
 
 import type { ArchiveRecord } from '../types'
 import { ArchivePlate } from './archive-plate'
+import { ConvictionPanel } from './conviction-panel'
 import { DiscoveryPlate } from './discovery-plate'
 import { EvidencePanel } from './evidence-panel'
 import { MasteryPlate } from './mastery-plate'
@@ -59,6 +61,10 @@ export function ArchiveScene({ record, displayName }: ArchiveSceneProps) {
    * the world down.
    */
   useWorldWarmth(momentum)
+
+  // A narrower, drier room than the observatory: less body, a higher texture,
+  // a slower breath. The same run resolves it in the same way.
+  useSoundscape('archive', momentum)
 
   const isNewcomer = observatory.isNewcomer
 
@@ -127,10 +133,21 @@ export function ArchiveScene({ record, displayName }: ArchiveSceneProps) {
         </ArchivePlate>
       </DepthPlane>
 
-      {/* ── 03 · Discoveries ───────────────────────────────────────────────── */}
+      {/* ── 03 · Conviction ────────────────────────────────────────────────── */}
       <DepthPlane depth="near">
         <ArchivePlate
           index={3}
+          standfirst="Confidence is a feeling and costs nothing. A stake is a commitment — so what you back is a different measurement from what you say."
+          title="Conviction"
+        >
+          <ConvictionPanel accuracy={observatory.accuracy} wagers={record.wagers} />
+        </ArchivePlate>
+      </DepthPlane>
+
+      {/* ── 04 · Discoveries ───────────────────────────────────────────────── */}
+      <DepthPlane depth="near">
+        <ArchivePlate
+          index={4}
           standfirst="Every discovery in the catalogue, found or not. Each one marks a kind of learning rather than an amount of play."
           title="Discoveries"
         >
@@ -138,10 +155,10 @@ export function ArchiveScene({ record, displayName }: ArchiveSceneProps) {
         </ArchivePlate>
       </DepthPlane>
 
-      {/* ── 04 · Reflections ───────────────────────────────────────────────── */}
+      {/* ── 05 · Reflections ───────────────────────────────────────────────── */}
       <DepthPlane depth="near">
         <ArchivePlate
-          index={4}
+          index={5}
           standfirst="Your words, exactly as you wrote them. Nothing here is edited or scored."
           title="Reflections"
         >
@@ -149,10 +166,10 @@ export function ArchiveScene({ record, displayName }: ArchiveSceneProps) {
         </ArchivePlate>
       </DepthPlane>
 
-      {/* ── 05 · The twin ──────────────────────────────────────────────────── */}
+      {/* ── 06 · The twin ──────────────────────────────────────────────────── */}
       <DepthPlane depth="mid">
         <ArchivePlate
-          index={5}
+          index={6}
           standfirst="A model of how you decide, built from this record and nothing else. It guesses before some scenarios — and it is wrong often enough to be worth arguing with."
           title="Cognitive Twin"
         >

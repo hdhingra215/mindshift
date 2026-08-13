@@ -2,6 +2,7 @@ import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Slot } from "radix-ui"
 
+import { signal, type MomentName } from "@/lib/feedback"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
@@ -41,17 +42,35 @@ const buttonVariants = cva(
   }
 )
 
+/**
+ * A button makes **no sound by default.**
+ *
+ * That is the rule the 8.9 redesign turns on. Sound marks consequence, not
+ * clickability, so a control is silent unless the thing it does is a moment in
+ * its own right — committing an answer, staking Insight — in which case it
+ * names that moment (`moment="answer.commit"`). Marking every press is what
+ * makes an interface sound like an interface.
+ */
 function Button({
   className,
   variant = "default",
   size = "default",
   asChild = false,
+  moment,
+  onClick,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
+    /** The act this button performs, if it is one. Silent when omitted. */
+    moment?: MomentName
   }) {
   const Comp = asChild ? Slot.Root : "button"
+
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (moment) signal(moment)
+    onClick?.(event)
+  }
 
   return (
     <Comp
@@ -59,6 +78,7 @@ function Button({
       data-variant={variant}
       data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
+      onClick={handleClick}
       {...props}
     />
   )

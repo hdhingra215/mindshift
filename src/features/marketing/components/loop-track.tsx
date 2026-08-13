@@ -1,7 +1,8 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
 
 import type { GlowTone } from '@/components/motion'
+import { createScrubber } from '@/lib/feedback'
 import { useSectionProgress, useTransform, useReducedMotion } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
@@ -41,6 +42,26 @@ export function LoopTrack({ className }: LoopTrackProps) {
   // The rail fills across the middle of the section's scroll pass, so it is
   // already moving when the first beat is read and completes near the last.
   const railScale = useTransform(progress, [0.1, 0.75], [0, 1], { clamp: true })
+
+  /*
+   * The rail, felt.
+   *
+   * The light travelling down the rail is the one place on the page where the
+   * reader is moving something rather than reading it, so it is the one place
+   * that earns scroll-linked haptics. A pulse fires when the fill *crosses a
+   * stop* — never per scroll event, which would be a continuous buzz and a
+   * battery drain.
+   *
+   * Driven by subscribing to the MotionValue rather than lifting it into state:
+   * the rail already animates without a React render per frame, and feeling it
+   * must not be the thing that adds one. There are as many detents as there are
+   * beats on the rail, so the pulses land exactly where the eye stops.
+   */
+  useEffect(() => {
+    if (reduced) return
+    const scrub = createScrubber(LOOP_STAGES.length)
+    return railScale.on('change', scrub)
+  }, [railScale, reduced])
 
   return (
     <div className={cn('relative', className)} ref={ref}>

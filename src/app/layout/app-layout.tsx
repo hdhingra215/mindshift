@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 import { FloatingBackground, MouseFollower } from '@/components/motion'
 import { WorldCanvas } from '@/components/world'
+import { useAudioRuntime } from '@/lib/feedback'
 
 type AppLayoutProps = {
   children?: ReactNode
@@ -24,6 +25,14 @@ type AppLayoutProps = {
  * them changes nothing about what the product communicates.
  */
 export function AppLayout({ children }: AppLayoutProps) {
+  /*
+   * The audible half of the same world, armed exactly once and for the same
+   * reason (§12.19). Nothing is constructed here: the audio graph does not
+   * exist until the player's first pointer or key event, so a visitor who lands
+   * and reads has no audio machinery at all.
+   */
+  useAudioRuntime()
+
   return (
     <div className="relative min-h-dvh bg-background text-foreground antialiased">
       {/*

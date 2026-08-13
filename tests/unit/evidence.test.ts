@@ -11,6 +11,10 @@ import {
   strongestKnown,
   summariseCalibration,
   summariseDecisions,
+  MIN_CONVICTION_SAMPLE,
+  describeConviction,
+  formatInsightMovement,
+  summariseConviction,
 } from '@/features/profile'
 import type { ArchiveCalibrationPoint, ArchiveDecision } from '@/features/profile'
 
@@ -296,5 +300,111 @@ describe('formatting', () => {
     expect(formatShare(0.375)).toBe('38%')
     expect(formatShare(1.4)).toBe('100%')
     expect(formatShare(Number.NaN)).toBe('0%')
+  })
+})
+
+describe('conviction — what a stake says that an answer does not', () => {
+  const wager = (stake: number, wasCorrect: boolean) => ({
+    stake,
+    wasCorrect,
+    delta: wasCorrect ? stake : -stake,
+  })
+
+  /** n settled wagers at one tier, `correct` of them right. */
+  const run = (stake: number, total: number, correct: number) =>
+    Array.from({ length: total }, (_, i) => wager(stake, i < correct))
+
+  it('refuses a reading below the sample floor, and says what it is waiting for', () => {
+    const summary = summariseConviction(run(10, MIN_CONVICTION_SAMPLE - 1, 4), 50)
+
+    expect(summary.direction).toBe('insufficient')
+    expect(summary.stakedAccuracy).toBeNull()
+    expect(summary.edge).toBeNull()
+    // The floor is higher here than anywhere else in the archive because this
+    // is a comparison of two rates, and a difference between two small samples
+    // is noise wearing the clothes of a finding.
+    expect(MIN_CONVICTION_SAMPLE).toBeGreaterThan(MIN_CALIBRATION_SAMPLE)
+    expect(describeConviction(summary)).toMatch(/settled/i)
+  })
+
+  it('says nothing at all before the first stake settles', () => {
+    const summary = summariseConviction([], 60)
+    expect(summary.sampleSize).toBe(0)
+    expect(summary.netInsight).toBe(0)
+    expect(describeConviction(summary)).toMatch(/no stakes settled/i)
+  })
+
+  it('reports the gap against overall accuracy, not the staked rate alone', () => {
+    // 8 of 10 staked decisions right, against a 60% overall rate.
+    const summary = summariseConviction(run(25, 10, 8), 60)
+
+    expect(summary.stakedAccuracy).toBe(80)
+    expect(summary.edge).toBe(20)
+    expect(summary.direction).toBe('sharper')
+  })
+
+  it('reads the same staked rate differently against a different baseline', () => {
+    // The whole reason the comparison exists: 80% is a finding against 60% and
+    // a shortfall against 95%.
+    const sharper = summariseConviction(run(25, 10, 8), 60)
+    const looser = summariseConviction(run(25, 10, 8), 95)
+
+    expect(sharper.stakedAccuracy).toBe(looser.stakedAccuracy)
+    expect(sharper.direction).toBe('sharper')
+    expect(looser.direction).toBe('looser')
+  })
+
+  it('calls a small difference level rather than inventing a trend', () => {
+    const summary = summariseConviction(run(10, 10, 7), 68)
+    expect(summary.direction).toBe('level')
+  })
+
+  it('withholds a per-tier accuracy until that tier has its own evidence', () => {
+    const summary = summariseConviction([...run(10, 6, 4), ...run(50, 2, 2)], 55)
+
+    const small = summary.bands.find((band) => band.stake === 10)
+    const large = summary.bands.find((band) => band.stake === 50)
+
+    expect(small?.accuracy).toBe(67)
+    // Two decisions is not a 100% record, and drawing it as one would be the
+    // most misleading thing on the screen.
+    expect(large?.accuracy).toBeNull()
+    expect(large?.attempts).toBe(2)
+  })
+
+  it('orders the tiers ascending, whatever order they arrived in', () => {
+    const summary = summariseConviction([...run(50, 3, 2), ...run(10, 3, 1)], 50)
+    expect(summary.bands.map((band) => band.stake)).toEqual([10, 50])
+  })
+
+  it('reports net Insight exactly, including before the floor', () => {
+    // The movement is a fact about a ledger, not a claim about a pattern, so it
+    // is always exact and never withheld.
+    const summary = summariseConviction([wager(50, true), wager(10, false)], 50)
+    expect(summary.netInsight).toBe(40)
+    expect(summary.stakedAccuracy).toBeNull()
+  })
+
+  it('never scolds, never diagnoses, and never mentions gambling', () => {
+    const readings = [
+      summariseConviction([], 50),
+      summariseConviction(run(10, 3, 1), 50),
+      summariseConviction(run(25, 12, 3), 70),
+      summariseConviction(run(25, 12, 11), 55),
+    ].map(describeConviction)
+
+    for (const line of readings) {
+      // The archive holds evidence; it does not judge the person holding it.
+      expect(line).not.toMatch(/reckless|foolish|bad|poor|should have|you are over/i)
+      // And the mechanic is a commitment, never a bet (§5.4).
+      expect(line).not.toMatch(/\bbet\b|gambl|wager|odds|luck|win streak|payout/i)
+    }
+  })
+
+  it('states the Insight movement plainly in both directions', () => {
+    expect(formatInsightMovement(0)).toMatch(/even/i)
+    expect(formatInsightMovement(35)).toContain('+35')
+    // A shortfall is not softened or hidden.
+    expect(formatInsightMovement(-35)).toContain('-35')
   })
 })

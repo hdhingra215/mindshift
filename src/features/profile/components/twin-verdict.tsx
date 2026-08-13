@@ -1,5 +1,6 @@
 import { InstrumentFrame } from '@/components/world'
 import { RevealContainer } from '@/components/motion'
+import { PHRASE, useSignalOnMount } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
 import { describeEvidence, describeVerdict } from '../lib/twin'
@@ -25,6 +26,10 @@ type TwinVerdictCardProps = {
  */
 export function TwinVerdictCard({ verdict }: TwinVerdictCardProps) {
   const { eyebrow, line } = describeVerdict(verdict)
+
+  // Third in the phrase, after the player's own commitment has settled. Hit and
+  // miss are the same size of sound, as they are the same size of card.
+  useSignalOnMount(verdict.wasCorrect ? 'twin.hit' : 'twin.miss', { delayMs: PHRASE.third })
 
   return (
     <RevealContainer className="mx-auto w-full max-w-2xl" delay={80} distance="sm" duration="slow">

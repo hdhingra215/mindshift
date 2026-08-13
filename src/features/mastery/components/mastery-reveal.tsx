@@ -1,3 +1,4 @@
+import { PHRASE, useSignalOnMount } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
 import { MasteryMeter } from './mastery-meter'
@@ -19,6 +20,11 @@ type MasteryRevealProps = {
  * panel would be worse than its absence.
  */
 export function MasteryReveal({ awards, className }: MasteryRevealProps) {
+  // Fourth in the phrase — the bell, because mastery is the metric the player
+  // is actually here for. Held even when there is nothing to show, since a hook
+  // cannot sit behind a return; the cue itself is what gets skipped.
+  useSignalOnMount('reward.mastery', { delayMs: PHRASE.fourth, enabled: awards.length > 0 })
+
   if (awards.length === 0) return null
 
   return (

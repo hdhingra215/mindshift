@@ -45,6 +45,20 @@ export type ArchiveCalibrationPoint = {
 }
 
 /** One reflection, kept exactly as written. Reflections are never edited. */
+/**
+ * One settled wager, as the archive reads it.
+ *
+ * Only *resolved* wagers appear: an open stake has no outcome yet, and counting
+ * it either way would make the conviction reading move on scenarios the player
+ * has not finished. `delta` is the server's signed Insight movement, never
+ * recomputed here.
+ */
+export type ArchiveWager = {
+  stake: number
+  wasCorrect: boolean
+  delta: number
+}
+
 export type ArchiveReflection = {
   id: string
   text: string
@@ -202,6 +216,8 @@ export type ArchiveRecord = {
    * quietly narrows its own scope is lying.
    */
   decisionsTruncated: boolean
+  /** Settled wagers, newest first. Empty for a player who has never staked. */
+  wagers: ArchiveWager[]
   reflections: readonly ArchiveReflection[]
   /** Total reflections written, which may exceed the number shown. */
   reflectionTotal: number

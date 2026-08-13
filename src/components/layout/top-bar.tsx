@@ -1,4 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router'
+import { SoundToggle } from '@/components/feedback'
 import { Logo } from '@/components/shared/logo'
 import { NAV_ITEMS } from './nav-items'
 import { UserMenu } from './user-menu'
@@ -34,8 +35,16 @@ export function TopBar() {
         ) : null}
       </div>
 
-      <div className="md:hidden">
-        <UserMenu variant="compact" />
+      {/*
+       * The mute control sits at every breakpoint, unlike the account menu:
+       * whatever room the player is in, silencing it is one press away from
+       * where they are hearing it.
+       */}
+      <div className="flex items-center gap-1">
+        <SoundToggle />
+        <div className="md:hidden">
+          <UserMenu variant="compact" />
+        </div>
       </div>
     </header>
   )

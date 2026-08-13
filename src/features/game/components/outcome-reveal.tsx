@@ -1,6 +1,7 @@
 import { CheckCircle2, Eye, Lightbulb } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { useSignalOnMount } from '@/lib/feedback'
 import type { AttemptRecord, GameScenario } from '../types'
 
 type OutcomeRevealProps = {
@@ -18,6 +19,16 @@ export function OutcomeReveal({ scenario, attempt }: OutcomeRevealProps) {
   const { outcome } = attempt
   const correct = outcome.isCorrect
   const bias = scenario.primaryBias
+
+  /*
+   * The head of the reveal phrase, at zero. Everything else that lands on this
+   * screen — the wager, the Twin, mastery, XP — is offset behind it, so four
+   * surfaces arriving together are heard as one sequence settling rather than
+   * as four sounds colliding.
+   *
+   * A miss is the same size of event as a catch. See the catalogue.
+   */
+  useSignalOnMount(correct ? 'outcome.correct' : 'outcome.miss')
 
   return (
     <div className="mx-auto flex max-w-2xl animate-in fade-in slide-in-from-bottom-1 flex-col gap-6 duration-300">

@@ -3,6 +3,7 @@ import { Check, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { signal } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 import { DifficultyBadge } from './difficulty-badge'
 import type { GameScenario } from '../types'
@@ -76,7 +77,10 @@ export function ScenarioPlay({
         <p className="text-sm font-medium text-foreground">What do you do?</p>
         <RadioGroupPrimitive.Root
           value={selectedChoiceId ?? undefined}
-          onValueChange={onSelect}
+          onValueChange={(choiceId) => {
+            signal('choice.select')
+            onSelect(choiceId)
+          }}
           disabled={submitting}
           aria-label="Choose your response"
           className="grid gap-3"
@@ -85,6 +89,14 @@ export function ScenarioPlay({
             <RadioGroupPrimitive.Item
               key={choice.id}
               value={choice.id}
+              /*
+               * Hover is a mouse idea. Restricting the cue to a mouse pointer
+               * keeps a touch player from hearing a "hover" they never did, and
+               * a keyboard player from hearing one per arrow key.
+               */
+              onPointerEnter={(event) => {
+                if (event.pointerType === 'mouse') signal('choice.hover')
+              }}
               className={cn(
                 'group/choice flex w-full items-start gap-3 rounded-xl border border-border bg-card p-4 text-left transition-all outline-none',
                 'hover:border-primary/40 hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50',
@@ -118,6 +130,8 @@ export function ScenarioPlay({
           disabled={!selectedChoiceId || submitting}
           aria-busy={submitting}
           onClick={onSubmit}
+          // The one commitment in the loop: a mechanism seating, in the hand.
+          moment="answer.commit"
         >
           {submitting ? (
             <>

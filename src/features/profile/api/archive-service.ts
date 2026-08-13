@@ -8,6 +8,7 @@ import type {
   ArchiveDiscovery,
   ArchiveRecord,
   ArchiveReflection,
+  ArchiveWager,
 } from '../types'
 
 /**
@@ -46,6 +47,16 @@ const DECISION_WINDOW = 400
 /** Reflections shown on the shelf. The count above it is the true total. */
 const REFLECTION_LIMIT = 12
 
+/**
+ * How many settled wagers the conviction reading describes.
+ *
+ * The same bounded-window reasoning as the decisions above, and the same
+ * honesty requirement: a summary drawn from a slice must not present itself as
+ * a summary of everything. Wagers are far rarer than attempts, so this ceiling
+ * is unlikely to bite before the server-side rollup lands (§8.14).
+ */
+const WAGER_WINDOW = 400
+
 type Result<T> = { data: T; error: null } | { data: null; error: string }
 
 export async function fetchArchiveRecord(playerId: string): Promise<Result<ArchiveRecord>> {
@@ -57,6 +68,7 @@ export async function fetchArchiveRecord(playerId: string): Promise<Result<Archi
     reflectionCount,
     catalogue,
     unlocked,
+    wagerRows,
     twin,
   ] = await Promise.all([
       fetchObservatoryScene(playerId),
@@ -86,6 +98,19 @@ export async function fetchArchiveRecord(playerId: string): Promise<Result<Archi
         .is('deleted_at', null)
         .order('slug', { ascending: true }),
       supabase.from('player_achievements').select('achievement_id, unlocked_at').eq('player_id', playerId),
+      /*
+       * Settled wagers only. An open stake has no outcome yet, and counting it
+       * either way would move the conviction reading on a scenario the player
+       * has not finished. `resolved_at` is the column the CHECK constraint
+       * keeps moving with the other three (§4.7), so it is the honest filter.
+       */
+      supabase
+        .from('attempt_wagers')
+        .select('stake, was_correct, delta')
+        .eq('player_id', playerId)
+        .not('resolved_at', 'is', null)
+        .order('resolved_at', { ascending: false })
+        .limit(WAGER_WINDOW),
       // Degrades to a sealed Twin on its own rather than failing the archive.
       fetchTwinState(playerId),
     ])
@@ -144,6 +169,18 @@ export async function fetchArchiveRecord(playerId: string): Promise<Result<Archi
     return [{ confidenceBefore, isCorrect }]
   })
 
+  /*
+   * Degrades to an empty reading rather than failing the archive, like the
+   * reflections above: a player who cannot load their wagers should still see
+   * their mastery, their decisions and their discoveries.
+   */
+  const wagers: ArchiveWager[] = (wagerRows.error ? [] : (wagerRows.data ?? [])).flatMap((row) => {
+    // A row mid-resolution has the outcome columns still null. The filter above
+    // excludes those; this narrows the types rather than trusting it.
+    if (typeof row.was_correct !== 'boolean' || row.delta === null) return []
+    return [{ stake: row.stake, wasCorrect: row.was_correct, delta: row.delta }]
+  })
+
   const unlockedAtById = new Map(
     (unlocked.error ? [] : (unlocked.data ?? [])).map(
       (row) => [row.achievement_id, row.unlocked_at] as const,
@@ -166,6 +203,7 @@ export async function fetchArchiveRecord(playerId: string): Promise<Result<Archi
       decisions,
       calibration,
       decisionsTruncated: decisions.length >= DECISION_WINDOW,
+      wagers,
       reflections,
       reflectionTotal: reflectionCount.count ?? reflections.length,
       discoveries,

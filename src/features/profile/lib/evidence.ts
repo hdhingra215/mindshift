@@ -1,7 +1,7 @@
 import { MASTERY_MAX, type MasteryTierId } from '@/features/mastery'
 import type { ObservatoryBias } from '@/features/dashboard'
 
-import type { ArchiveCalibrationPoint, ArchiveDecision } from '../types'
+import type { ArchiveCalibrationPoint, ArchiveDecision, ArchiveWager } from '../types'
 
 /**
  * Descriptive summaries of a player's recorded history.
@@ -269,4 +269,155 @@ export function formatShare(share: number): string {
 /** Mastery averaged across a family, as a percentage of the scale. */
 export function formatFamilyMastery(standing: FamilyStanding): string {
   return `${Math.round((standing.averageMastery / MASTERY_MAX) * 100)}%`
+}
+
+/**
+ * Wagers needed before conviction is described at all.
+ *
+ * Higher than the calibration floor, and deliberately so: a conviction reading
+ * compares two accuracies, and a difference between two small samples is noise
+ * wearing the clothes of a finding. Six settled stakes is still not many — the
+ * copy says the count every time, so the player can weigh it themselves.
+ */
+export const MIN_CONVICTION_SAMPLE = 6
+
+/** Points of difference inside which staked and overall accuracy are the same. */
+const CONVICTION_TOLERANCE = 5
+
+export type ConvictionBand = {
+  stake: number
+  attempts: number
+  correct: number
+  /** 0–100. Null below the per-tier floor — a tier is not a claim on two rows. */
+  accuracy: number | null
+}
+
+export type ConvictionSummary = {
+  /** Settled wagers in the record. */
+  sampleSize: number
+  /** Accuracy on the decisions the player staked on, 0–100. Null below the floor. */
+  stakedAccuracy: number | null
+  /** Signed points: staked accuracy minus overall accuracy. Null below the floor. */
+  edge: number | null
+  /**
+   * What the two numbers say about each other. `insufficient` is a first-class
+   * answer, exactly as it is for calibration.
+   */
+  direction: 'sharper' | 'looser' | 'level' | 'insufficient'
+  /** Mean stake, in Insight. Null below the floor. */
+  averageStake: number | null
+  /** Net Insight across every settled wager. Signed, and always exact. */
+  netInsight: number
+  /** Per-tier breakdown, ascending by stake. Only tiers actually used appear. */
+  bands: ConvictionBand[]
+}
+
+/** A tier needs at least this many settled wagers before it states an accuracy. */
+const MIN_BAND_SAMPLE = 3
+
+/**
+ * Conviction — whether the player's certainty tracks their judgement.
+ *
+ * The Blind Wager mechanic exists to measure one thing that confidence cannot:
+ * not how sure someone *says* they are, but how much they will put behind it
+ * (§4.7). This turns the settled record into that reading.
+ *
+ * ── Why it compares against overall accuracy ────────────────────────────────
+ * A staked accuracy on its own says nothing — 70% is excellent for a player who
+ * is right 55% of the time and poor for one who is right 85% of the time. The
+ * *difference* is the measurement, which is also why the sample floor here is
+ * higher than anywhere else in the archive: it is a comparison of two rates.
+ *
+ * Descriptive only, like everything in this file. It reports two numbers and
+ * the gap between them and stops; "you are overconfident" is a claim about a
+ * person, and the archive does not make those.
+ */
+export function summariseConviction(
+  wagers: readonly ArchiveWager[],
+  overallAccuracy: number,
+): ConvictionSummary {
+  const netInsight = wagers.reduce((total, wager) => total + wager.delta, 0)
+
+  const byStake = new Map<number, { attempts: number; correct: number }>()
+  for (const wager of wagers) {
+    const band = byStake.get(wager.stake) ?? { attempts: 0, correct: 0 }
+    band.attempts += 1
+    band.correct += wager.wasCorrect ? 1 : 0
+    byStake.set(wager.stake, band)
+  }
+
+  const bands: ConvictionBand[] = [...byStake.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([stake, band]) => ({
+      stake,
+      attempts: band.attempts,
+      correct: band.correct,
+      accuracy:
+        band.attempts >= MIN_BAND_SAMPLE
+          ? Math.round((band.correct / band.attempts) * 100)
+          : null,
+    }))
+
+  if (wagers.length < MIN_CONVICTION_SAMPLE) {
+    return {
+      sampleSize: wagers.length,
+      stakedAccuracy: null,
+      edge: null,
+      direction: 'insufficient',
+      averageStake: null,
+      netInsight,
+      bands,
+    }
+  }
+
+  const correct = wagers.reduce((count, wager) => count + (wager.wasCorrect ? 1 : 0), 0)
+  const stakedAccuracy = (correct / wagers.length) * 100
+  const edge = stakedAccuracy - overallAccuracy
+  const averageStake = wagers.reduce((total, wager) => total + wager.stake, 0) / wagers.length
+
+  return {
+    sampleSize: wagers.length,
+    stakedAccuracy: Math.round(stakedAccuracy),
+    edge: Math.round(edge),
+    direction:
+      Math.abs(edge) <= CONVICTION_TOLERANCE ? 'level' : edge > 0 ? 'sharper' : 'looser',
+    averageStake: Math.round(averageStake),
+    netInsight,
+    bands,
+  }
+}
+
+/**
+ * The conviction reading, in one sentence.
+ *
+ * Same four rules the Twin's copy follows: evidence never diagnosis, never
+ * certainty, silence is a real answer, and nothing here scolds. A player whose
+ * conviction runs ahead of their judgement is told what the two numbers are,
+ * not what kind of person that makes them.
+ */
+export function describeConviction(summary: ConvictionSummary): string {
+  if (summary.direction === 'insufficient') {
+    return summary.sampleSize === 0
+      ? 'No stakes settled yet. Backing a decision with Insight is how this reading gets made — it measures conviction, which is a different thing from confidence.'
+      : `${summary.sampleSize} ${summary.sampleSize === 1 ? 'stake has' : 'stakes have'} settled. A few more and this can compare how you do when you commit against how you do overall.`
+  }
+
+  const staked = `${summary.stakedAccuracy}%`
+  const across = `across ${summary.sampleSize} staked ${summary.sampleSize === 1 ? 'decision' : 'decisions'}`
+
+  if (summary.direction === 'level') {
+    return `Right ${staked} of the time when you stake, ${across} — the same rate as when you don't. Your conviction is tracking your judgement.`
+  }
+
+  if (summary.direction === 'sharper') {
+    return `Right ${staked} of the time when you stake, ${across} — ${Math.abs(summary.edge ?? 0)} points above your overall rate. You are backing the ones you actually know.`
+  }
+
+  return `Right ${staked} of the time when you stake, ${across} — ${Math.abs(summary.edge ?? 0)} points below your overall rate. Conviction ran ahead of judgement on these.`
+}
+
+/** The Insight movement, stated plainly and never softened. */
+export function formatInsightMovement(net: number): string {
+  if (net === 0) return 'Even, overall.'
+  return net > 0 ? `+${net} Insight, overall.` : `${net} Insight, overall.`
 }
