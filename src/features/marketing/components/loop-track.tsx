@@ -56,6 +56,11 @@ export function LoopTrack({ className }: LoopTrackProps) {
    * the rail already animates without a React render per frame, and feeling it
    * must not be the thing that adds one. There are as many detents as there are
    * beats on the rail, so the pulses land exactly where the eye stops.
+   *
+   * The scrubber knows which way the rail moved: down the page *advances* it
+   * (`rail.advance` — a reel winding in, and a mark to feel), back up only
+   * re-arms it (`rail.return` — a light detent, silent). Both are throttled at
+   * the moment level, so scrubbing across a boundary cannot produce a stream.
    */
   useEffect(() => {
     if (reduced) return

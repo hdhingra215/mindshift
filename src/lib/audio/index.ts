@@ -14,7 +14,12 @@
  * Full rationale in `docs/architecture/AudioSystem.md`.
  */
 
-export { CEILING, DEFAULT_MIX, PHRASE, RESONANCE } from './tokens'
+export { CEILING, DEFAULT_MIX, PHRASE, RESONANCE, type SampleName } from './tokens'
+export {
+  SAMPLE_NAMES,
+  loadInteractionSamples,
+  resetInteractionSampleLoading,
+} from './samples'
 export {
   getAudioMix,
   isAudible,

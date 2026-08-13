@@ -188,6 +188,10 @@ const { applyAmbience, bedCount, popSoundscape, pushSoundscape, updateSoundscape
   '@/lib/audio/ambience'
 )
 const { DEFAULT_MIX } = await import('@/lib/audio/tokens')
+const { getSample, clearSampleBuffers } = await import('@/lib/audio/engine')
+const { SAMPLE_NAMES, loadInteractionSamples, resetInteractionSampleLoading } = await import(
+  '@/lib/audio/samples'
+)
 
 /** Let the ambience layer's fetch → decode → build chain settle. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -358,6 +362,47 @@ describe('materials', () => {
     const first = created.bufferSources.length
     playCue('graze')
     expect(created.bufferSources).toHaveLength(first)
+  })
+
+  it('skips a recording that has not decoded yet rather than arriving late', () => {
+    clearSampleBuffers()
+    // `enter` is one recording plus a body plus a strike. Without the buffer the
+    // moment is briefly less rich, and never silent or late.
+    playCue('enter')
+    expect(created.oscillators).toHaveLength(1)
+    expect(created.bufferSources).toHaveLength(1)
+  })
+
+  it('plays a recording through the same buses as everything else', async () => {
+    clearSampleBuffers()
+    resetInteractionSampleLoading()
+    await loadInteractionSamples()
+    // All three decoded into *this* graph's context — not a second one of their
+    // own, which is what installing Soundcn's engine would have done.
+    expect(SAMPLE_NAMES.every((name) => getSample(name) !== null)).toBe(true)
+
+    drain()
+    created.bufferSources.length = 0
+    created.oscillators.length = 0
+    resetCueThrottles()
+
+    playCue('enter')
+    // Now the recording plays too: two buffer sources (the sample and the
+    // strike's noise) and the body.
+    expect(created.bufferSources).toHaveLength(2)
+    expect(created.oscillators).toHaveLength(1)
+    // And it is a voice like any other, so the spam ceiling governs it.
+    expect(voiceCount()).toBeGreaterThan(0)
+    drain()
+    expect(voiceCount()).toBe(0)
+  })
+
+  it('leaves the recordings out of the environment entirely', async () => {
+    // The approved ambience is one looping source and stays that way: an
+    // interaction recording must never end up looping in the bed.
+    const looping = created.bufferSources.filter((source) => source.loop)
+    expect(looping).toHaveLength(0)
+    expect(bedCount()).toBeLessThanOrEqual(1)
   })
 
   it('plays nothing at all while muted', () => {

@@ -1,5 +1,10 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { AuthShell, SignupForm, redirectIfAuthenticated } from '@/features/auth'
+import {
+  AuthShell,
+  ContinueWithGoogle,
+  SignupForm,
+  redirectIfAuthenticated,
+} from '@/features/auth'
 
 function SignupPage() {
   return (
@@ -19,6 +24,7 @@ function SignupPage() {
       }
     >
       <SignupForm />
+      <ContinueWithGoogle />
     </AuthShell>
   )
 }

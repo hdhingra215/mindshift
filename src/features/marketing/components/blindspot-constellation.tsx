@@ -1,6 +1,12 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 
-import { subscribePointer, ambientMotionAllowed, useReducedMotion } from '@/lib/motion'
+import { signal } from '@/lib/feedback'
+import {
+  subscribePointer,
+  ambientMotionAllowed,
+  prefersReducedMotion,
+  useReducedMotion,
+} from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
 import { BIAS_CONSTELLATION } from '../constants'
@@ -94,6 +100,44 @@ export function BlindspotConstellation({ litSlug, className }: BlindspotConstell
   )
 }
 
+/**
+ * The glint — the visual half of a blind spot lighting up.
+ *
+ * A single halo expanding once out of the point and fading, plus a small
+ * overshoot on the star itself. Deliberately *not* a sparkle: no particles, no
+ * rays, no second colour, nothing that lands outside the point's own footprint.
+ * The brief is "something inside your mind just lit up", and a light coming on
+ * is one shape growing and settling.
+ *
+ * Runs on the Web Animations API on the node itself, so it costs no React
+ * render and cannot outlive the element. Silent under reduced motion — where the
+ * point is already at full presence and has nothing to reveal.
+ */
+function flash(halo: HTMLElement | null, star: HTMLElement | null): void {
+  if (prefersReducedMotion()) return
+
+  halo?.animate(
+    [
+      { opacity: 0, transform: 'scale(0.35)' },
+      { opacity: 0.5, transform: 'scale(1.15)', offset: 0.28 },
+      { opacity: 0, transform: 'scale(2.4)' },
+    ],
+    { duration: 620, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+  )
+
+  // `filter`, not `transform`: the star's scale is already driven by the
+  // `--nearness` variable in its inline style, and animating the same property
+  // would fight the cursor for it and then snap back.
+  star?.animate(
+    [
+      { filter: 'brightness(1)' },
+      { filter: 'brightness(2.2)', offset: 0.2 },
+      { filter: 'brightness(1)' },
+    ],
+    { duration: 520, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+  )
+}
+
 type ConstellationPointProps = {
   point: BiasPoint
   isLit: boolean
@@ -119,6 +163,19 @@ function ConstellationPoint({
   onToggle,
 }: ConstellationPointProps) {
   const revealName = isLit || isActive
+  const haloRef = useRef<HTMLSpanElement>(null)
+  const starRef = useRef<HTMLSpanElement>(null)
+
+  /*
+   * One entry point for all three ways in — cursor, tap and keyboard — so the
+   * discovery is identical however it is reached. Firing the same moment from
+   * each is safe: `bias.spark` is throttled at 220 ms, which is what collapses
+   * the tap→focus pair a touch produces into the single event it actually is.
+   */
+  const spark = useCallback(() => {
+    signal('bias.spark')
+    flash(haloRef.current, starRef.current)
+  }, [])
 
   return (
     <li
@@ -135,9 +192,18 @@ function ConstellationPoint({
         onBlur={() => {
           if (isActive) onToggle()
         }}
-        onClick={onToggle}
+        onClick={() => {
+          spark()
+          onToggle()
+        }}
         onFocus={() => {
+          spark()
           if (!isActive) onToggle()
+        }}
+        // Mouse only: on a touch device the tap above is the interaction, and a
+        // synthesised enter would mark it twice.
+        onPointerEnter={(event) => {
+          if (event.pointerType === 'mouse') spark()
         }}
         style={
           // Under reduced motion every point sits at full presence rather than
@@ -146,6 +212,19 @@ function ConstellationPoint({
         }
         type="button"
       >
+        {/*
+         * The halo. At rest it is invisible and inert — it exists only to carry
+         * the one expansion `flash` plays through it, in the point's own hue.
+         */}
+        <span
+          aria-hidden="true"
+          className={cn(
+            'pointer-events-none absolute size-6 rounded-full opacity-0',
+            isLit ? 'bg-reward/30' : 'bg-brand/30'
+          )}
+          ref={haloRef}
+        />
+
         {/* The star */}
         <span
           aria-hidden="true"
@@ -153,6 +232,7 @@ function ConstellationPoint({
             'block size-1.5 rounded-full transition-[background-color] duration-[var(--motion-base)]',
             isLit ? 'bg-reward' : 'bg-foreground'
           )}
+          ref={starRef}
           style={{
             opacity: isLit || revealName ? 1 : 'calc(0.18 + var(--nearness, 0) * 0.82)',
             transform: 'scale(calc(1 + var(--nearness, 0) * 0.9))',

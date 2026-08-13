@@ -10,10 +10,22 @@
  *   engine.ts    support detection, the preference gates, the anti-buzz floor
  */
 
-export { PATTERNS, motorTime, type HapticPattern } from './patterns'
 export {
+  MAX_MOTOR_MS,
+  MAX_PULSE_MS,
+  MIN_PERCEPTIBLE_MS,
+  PATTERNS,
+  WEIGHT,
+  isDecisive,
+  motorTime,
+  pulses,
+  type HapticPattern,
+} from './patterns'
+export {
+  hapticBackend,
   hapticsSupported,
   resetHapticThrottles,
   vibrate,
+  type HapticBackend,
   type VibrateOptions,
 } from './engine'

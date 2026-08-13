@@ -49,3 +49,15 @@ export function toFriendlyAuthError(error: unknown): string {
 
   return 'Something slipped on our end. Your progress is safe — give it another go in a moment.'
 }
+
+/**
+ * Translate the `error` / `error_code` a provider hands back on the callback
+ * URL into the same calm voice. A cancelled consent screen is not a failure —
+ * it says so, and leaves the email form untouched and ready.
+ */
+export function toFriendlyOAuthError(code: string): string {
+  if (/access_denied|cancel/i.test(code)) {
+    return 'No problem — that Google sign-in was cancelled. Try again, or use your email below.'
+  }
+  return 'That Google sign-in didn’t complete. Try again, or use your email below.'
+}

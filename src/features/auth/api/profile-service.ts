@@ -15,10 +15,19 @@ import { supabase } from '@/lib/supabase/client'
  * populate the rest. RLS `profiles_insert_own` permits this (id = auth.uid()).
  */
 
+/**
+ * `display_name` is what email signup writes; `full_name` / `name` are what
+ * Google puts in the identity metadata. Preferring those over the email local
+ * part means an OAuth player lands on a real name, not "a.dhingra".
+ */
+const NAME_METADATA_KEYS = ['display_name', 'full_name', 'name'] as const
+
 function deriveDisplayName(user: User): string {
-  const metaName = user.user_metadata?.display_name
-  if (typeof metaName === 'string' && metaName.trim().length > 0) {
-    return metaName.trim()
+  for (const key of NAME_METADATA_KEYS) {
+    const value = user.user_metadata?.[key]
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim()
+    }
   }
   const localPart = user.email?.split('@')[0]
   return localPart && localPart.length > 0 ? localPart : 'Thinker'

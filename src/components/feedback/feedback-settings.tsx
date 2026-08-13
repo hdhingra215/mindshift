@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { InstrumentFrame } from '@/components/world'
-import { hapticsSupported } from '@/lib/haptics'
+import { hapticBackend, hapticsSupported } from '@/lib/haptics'
 import { resetAudioMix, setAudioMix, toggleHaptics, useAudioMix } from '@/lib/audio'
 import { signal } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
@@ -46,6 +46,10 @@ const CHANNELS = [
 export function FeedbackSettings() {
   const mix = useAudioMix()
   const canVibrate = hapticsSupported()
+  // iOS exposes one fixed system tap and no duration, so the strength control
+  // there is honestly an on/off. Saying so is cheaper than a player deciding the
+  // slider is broken.
+  const fixedStrength = hapticBackend() === 'switch'
 
   return (
     <InstrumentFrame as="section" className="max-w-md p-5" legend="Sound">
@@ -171,8 +175,9 @@ export function FeedbackSettings() {
           value={[Math.round(mix.hapticIntensity * 100)]}
         />
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Longer pulses feel stronger — it is the only control the browser gives
-          us over a vibration motor.
+          {fixedStrength
+            ? 'This device provides one fixed system tap, so this only turns vibration on or off.'
+            : 'Longer pulses feel stronger — it is the only control the browser gives us over a vibration motor.'}
         </p>
       </div>
 

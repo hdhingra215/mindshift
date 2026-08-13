@@ -43,3 +43,42 @@ and this is the one asset that must never silently fail to load.
 The exact command is recorded in `docs/architecture/AudioSystem.md` §2 so the
 asset can be rebuilt from source rather than treated as a binary nobody can
 regenerate.
+
+---
+
+## `soundcn-switch-001.mp3` · `soundcn-drop-003.mp3` · `soundcn-fish-reel-in.mp3`
+
+| | |
+|---|---|
+| **Titles** | Switch 001 · Drop 003 · Fish Reel In |
+| **Author** | Kenney — https://kenney.nl |
+| **Source** | the Soundcn registry: `@soundcn/switch-001`, `@soundcn/drop-003`, `@soundcn/fish-reel-in` |
+| **Licence** | **Creative Commons 0 1.0 Universal (CC0) — public domain dedication** |
+| **Licence text** | https://creativecommons.org/publicdomain/zero/1.0/ |
+| **Retrieved** | 2026-08-13 |
+
+**What CC0 permits.** As above: copy, modify, distribute and use commercially,
+with no permission required and no attribution obligation. The credit is
+recorded because knowing where an asset came from is good engineering.
+
+**What we ship, and how it was obtained.** Soundcn distributes each sound inside
+a shadcn registry item as a **base64 data URI**, alongside its own
+`lib/sound-engine.ts` (a second `AudioContext`, playing straight to
+`ctx.destination`) and a `useSound` hook. Installing those files would have put a
+second audio graph in the product — outside the mixer, the room, the limiter and
+the mute switch. So only the asset was taken:
+
+```sh
+npx shadcn view @soundcn/switch-001    # and drop-003, fish-reel-in
+# the `dataUri` field of registry/soundcn/sounds/<name>/<name>.ts,
+# base64-decoded to src/assets/sounds/soundcn-<name>.mp3
+```
+
+The bytes are the registry's bytes, unmodified — 5.5 kB, 2.1 kB and 15.1 kB of
+MP3. Files rather than inlined base64 so they stay out of the JS bundle, and
+trimming/rate-shifting happens at playback in `lib/audio/cues.ts` rather than in
+the assets, so what is on disk is exactly what was downloaded.
+
+Each one plays as a `sample` layer of an ordinary cue (`enter`, `stake`, `reel`),
+through the same sfx bus, room send and limiter as every synthesised material.
+See `docs/architecture/AudioSystem.md` §8.

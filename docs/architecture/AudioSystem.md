@@ -95,7 +95,7 @@ Asserted for every room, in both directions. A louder or busier world under a lo
 
 ## 5. The materials
 
-Nine sounds for the whole product — not nine events, nine **materials** the moment table assigns to acts. Choosing a supplier on the landing page and choosing an answer in a session strike the same wood, because they are the same act.
+Thirteen sounds for the whole product — not nine events, nine **materials** the moment table assigns to acts. Choosing a supplier on the landing page and choosing an answer in a session strike the same wood, because they are the same act.
 
 | | |
 |---|---|
@@ -108,6 +108,14 @@ Nine sounds for the whole product — not nine events, nine **materials** the mo
 | `tick` | A mark on an instrument. A hairline. |
 | `air` | Movement through the space. |
 | `veil` | The torch. Air, reversed and much smaller. |
+| `glint` | 8.11 · A blind spot lighting up. Two hairlines of glass, well into the room. The quietest thing in the product. |
+| `enter` | 8.11 · Entering the product. A switch closing (recording) over the commitment body. |
+| `stake` | 8.11 · Insight on the line. `seat` with a weight landing on it (recording). Heavier than committing an answer. |
+| `reel` | 8.11 · The progression rail advancing. The first third of a reel winding in (recording), rate-shifted down. |
+
+**Three of them carry a recording.** `enter`, `stake` and `reel` each include one `sample` layer — a short CC0 file from the Soundcn registry (`switch-001`, `drop-003`, `fish-reel-in`), provenance in `src/assets/sounds/LICENSE.md`. Soundcn also ships its own `AudioContext` and `useSound` hook; **those were not installed.** Only the asset was taken, and it plays as a layer of an ordinary cue through the same sfx bus, room send and limiter as everything synthesised — trimmed and rate-shifted at playback so one file can serve a gesture. Every cue with a recording also has synthesised layers, so a sample that has not finished decoding costs richness on the first use of a session and never silence or lateness.
+
+**The first nine are unchanged and stay unchanged.** 8.11 added materials; it retuned nothing. A unit test pins the original nine's layer counts, peaks and throttles for exactly that reason.
 
 **One action produces one layered event, never several sounds.** Layers are scheduled against a single audio-clock time, so a two-stage seat is one mechanism rather than two sounds that happened to be near each other. Each strike also starts at a random offset into the noise buffer — real materials are never struck in exactly the same place twice, and identical excitation is what makes repeated interface sounds feel mechanical.
 
@@ -119,46 +127,74 @@ Nine sounds for the whole product — not nine events, nine **materials** the mo
 
 ⚠ **Read this before promising haptics to anyone.**
 
-| Platform | `navigator.vibrate` |
-|---|---|
-| Chrome / Samsung Internet / WebView on **Android** | ✅ Works |
-| Chrome / Edge on **desktop** | API present, no motor — a no-op |
-| **Safari, macOS and iOS — every version** | ❌ **Not implemented** |
-| **Firefox 129+** | ❌ Support removed |
+| Platform | `navigator.vibrate` | Fallback backend |
+|---|---|---|
+| Chrome / Samsung Internet / WebView on **Android** | ✅ Works | — |
+| Chrome / Edge on **desktop** | API present, no motor — a no-op | — (no motor exists) |
+| **Safari on iOS/iPadOS 17.4+** | ❌ Not implemented | ⚠ `switch` control tap (below) |
+| **Safari on macOS** | ❌ Not implemented | — (Force Touch is not exposed to the web) |
+| **Firefox 129+** | ❌ Support removed | — |
 
-There is **no web API for the iPhone Taptic Engine or a Mac trackpad's haptics.** Force Touch is not exposed to the web, and the one iOS Safari haptic that does exist — the native switch control — cannot be triggered programmatically. Reaching that hardware requires a native wrapper, which is a product decision far outside this system.
+There is still **no web API for the Taptic Engine.** But since Safari 17.4 a `<input type="checkbox" switch>` produces a genuine system haptic when it is toggled, and that toggle can be driven from script inside a user gesture. Since 8.11 the engine uses it as a **second backend**: one hidden control, clicked once for a light pattern and twice for a decisive one.
 
-So: the haptics below are real and deliberate, and on an iPhone or a Mac they do nothing at all. The engine no-ops cleanly, the Settings copy says so, and **nothing in the product depends on a pulse being felt.**
+Its limits are real and are not worked around:
+
+- **No shape and no duration.** One system tap is all the platform gives, so every pattern collapses to one or two taps there. The intensity slider still gates it (zero is off) but cannot scale it.
+- **User gesture only.** A pulse that lands on mount — a reveal, a phrase beat — feels nothing on this backend. That is correct: the alternative is a phone tapping you while you read.
+- **Preferred last.** Where `navigator.vibrate` exists, this code never runs.
+
+So the haptics below are fully expressed on Android, reduced to a tap on a recent iPhone, and absent on desktop. The engine no-ops cleanly in every case and **nothing in the product depends on a pulse being felt.**
 
 ### The vocabulary
 
 `navigator.vibrate` exposes **duration only** — no amplitude, no sharpness, no waveform. Everything a pattern can say it says with pulse lengths and the gaps between them, and perceived strength is dwell time.
 
-That is why the 8.9 set felt weak: authored around a 60 ms ceiling with pulses as short as 4 ms, it was restrained on paper and imperceptible in the hand. Phase 8.10 roughly **doubled the scale** (2–3× motor time per pattern) and, more importantly, gave every pattern a distinct **shape** — two pulses of the same length are the same sensation however you space them.
+8.9 authored the set under a 60 ms ceiling with pulses as short as 4 ms. 8.10 doubled it to a 90 ms ceiling and an 8 ms floor. **Both were still imperceptible**, because the numbers were chosen against a design intention rather than against a motor. An LRA has a real spin-up cost:
+
+| Pulse | What actually reaches the hand |
+|---|---|
+| ≤ 10 ms | nothing. The pulse is a rumour. |
+| ~15 ms | detectable if you are holding the phone still and expecting it. |
+| ~25 ms | a definite, light tap. |
+| ~45 ms | a confident tap — the right weight for taking a decision. |
+| ~90 ms | weighted. Reads as a mechanism seating. |
+| > 180 ms | no longer an event. A buzz. |
+
+So 8.11 set the floor at **14 ms**, the ceiling on total motor time at **220 ms**, and the ceiling on any *single* pulse at **100 ms** — weight comes from a second, heavier stage after a gap, never from holding one pulse longer.
 
 | Pattern | Shape | Used for |
 |---|---|---|
-| `brush` 9 ms | single, lightest | option hover, torch sweep |
-| `hairline` 16 ms | single, definite | XP, rail notches |
-| `select` 26 ms | single, clean tap | choosing an option or a stake |
-| `commit` 78 ms | two-stage, weight in the second | answer and wager commitment |
-| `affirm` 58 ms | **rising** | correct, wager win, Twin hit |
-| `discover` 58 ms | **falling** | miss, wager loss, Twin miss |
-| `mark` 52 ms | symmetrical | mastery |
-| `milestone` 90 ms | crescendo, three pulses | achievements |
-| `reveal` 36 ms | soft rise | Twin speaking, reveals, room changes |
+| `brush` 18 ms | single, lightest | option hover, CTA hover, torch sweep, rail return |
+| `glint` 36 ms | two light glints | a blind spot lighting up |
+| `hairline` 26 ms | single, definite | XP, rail advance |
+| `select` 45 ms | single, clean tap | choosing an option or a stake |
+| `commit` 130 ms | two-stage, weight in the second | answer commitment, Start Training |
+| `stake` 186 ms | three-stage, longest last | wager commitment |
+| `affirm` 142 ms | **rising** | correct, wager win, Twin hit |
+| `discover` 142 ms | **falling** | miss, wager loss, Twin miss |
+| `mark` 128 ms | symmetrical | mastery |
+| `milestone` 156 ms | crescendo | achievements |
+| `reveal` 64 ms | soft rise | Twin speaking, reveals, room changes |
+
+### Weight classes
+
+Patterns are `light` or `decisive`. **Only light patterns queue behind the anti-buzz floor.** That distinction is the fix for the defect 8.11 was reported for: the floor is an anti-*repetition* device, and applying it to everything meant a hover pulse 40 ms before a click could swallow the commitment that followed — the interface felt dead at the exact moment it should have felt certain. Anything the player deliberately did now always reaches the motor.
 
 `affirm` and `discover` cost the motor **exactly the same** and are mirror images of each other — instantly distinguishable with the screen off, and neither is the harsher. A miss is a discovery (§12.20) in this channel too.
 
 ### Intensity
 
-`hapticIntensity` (0–1, default **1.0**) scales pulse durations while **holding the gaps**, so a pattern keeps its rhythm and only changes weight — scaling the gaps too would turn "lighter" into "slower", which is a different sensation. Pulses are floored at 8 ms, below which a pulse is not gentler but missing. Zero is off.
+`hapticIntensity` (0–1, default **1.0**) scales pulse durations while **holding the gaps**, so a pattern keeps its rhythm and only changes weight — scaling the gaps too would turn "lighter" into "slower", which is a different sensation. Pulses are floored at 14 ms, below which a pulse is not gentler but missing. Zero is off.
 
 The patterns are authored at the strength they are meant to be felt, so the slider **attenuates rather than boosts**: there is no hidden headroom a player has to go and find.
 
 ### Restraint
 
-Three gates in the engine — hardware support, preferences (mute outranks the switch, and zero intensity outranks both), reduced motion — then a 90 ms global floor and a per-moment throttle where a player can produce something continuously (`choice.hover` 320 ms, `rail.notch` 260 ms, `torch.sweep` 1600 ms).
+Three gates in the engine — backend support, preferences (mute outranks the switch, and zero intensity outranks both), reduced motion — then a **70 ms floor on light patterns** and a per-moment throttle where a player can produce something continuously (`bias.spark` 220 ms, `choice.hover` 320 ms, `rail.advance`/`rail.return` 420 ms, `torch.sweep` 1600 ms).
+
+Throttles are keyed by **moment**, not by pattern. Keying them by pattern meant the torch sweeping the hero (a `brush` every 1.6 s) also silenced the next option hover — a different event that happens to feel similar.
+
+**Phrase offsets apply to touch as well as sound.** A reveal screen mounts the outcome, the wager result, mastery and XP in one frame; haptics used to ignore the `PHRASE` ladder, so the floor kept the first pulse and dropped the rest. Each is now scheduled at its own beat, and its gates are re-evaluated when it lands — muting mid-phrase stops the pulses still to come.
 
 ### Scroll-linked haptics
 
@@ -166,7 +202,7 @@ The loop rail on the landing page is the one place a reader is *moving* somethin
 
 Nothing is bound to scrolling. `createScrubber(stops)` divides progress into bands and fires only when the value **crosses a boundary** — a handful of times across a section, in both directions, so the rail feels like a detent rather than a one-way animation. Driven by subscribing to the `MotionValue` directly: the rail already animates without a React render per frame, and feeling it must not be the thing that adds one.
 
-**It is silent.** A page that ticks while you scroll is unbearable; a rail you can feel moving under your thumb is the point.
+**Direction is the design.** Scrolling down *advances* the rail: `rail.advance` — a reel winding in, plus a mark to feel. Scrolling back up only re-arms it: `rail.return` — the lightest pattern, and **silent**, because re-reading a section is not progress. A page that ticks continuously while you scroll is unbearable, which is why the sound is attached to a threshold crossing (three per section), throttled at 420 ms at the moment and 520 ms at the material.
 
 ## 7. Accessibility
 
@@ -188,5 +224,6 @@ Nothing is bound to scrolling. `createScrubber(stops)` divides progress into ban
 7. **A miss, a shortfall and a Twin's error stay the same size as their counterparts** — in both channels. Asserted; do not weaken it to ship a punchier failure.
 8. **Gain staging is not a safety mechanism.** To make things quieter, lower a preference default — never a ceiling.
 9. **No new audio dependency.** Adding a library or a second asset format is a stack change (CLAUDE.md §3).
-10. **Never claim a haptic where the platform has none.** iOS and macOS cannot vibrate from the web; copy, docs and expectations must say so rather than implying the feature is merely subtle.
-11. **Never fake autoplay.** If the room cannot start, say so in the interface — do not reach for a silent buffer or a muted video.
+10. **The recorded materials are assets, not an engine.** If another Soundcn (or any other) sound is wanted, take the file and add it as a `sample` layer. Never install a registry item's audio engine, hook or context.
+11. **Never claim a haptic where the platform has none.** iOS and macOS cannot vibrate from the web; copy, docs and expectations must say so rather than implying the feature is merely subtle.
+12. **Never fake autoplay.** If the room cannot start, say so in the interface — do not reach for a silent buffer or a muted video.

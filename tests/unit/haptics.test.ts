@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  MAX_MOTOR_MS,
+  MAX_PULSE_MS,
   MIN_PERCEPTIBLE_MS,
+  isDecisive,
   motorTime,
   PATTERNS,
+  pulses,
   scalePattern,
+  WEIGHT,
   type HapticPattern,
 } from '@/lib/haptics/patterns'
 import { DEFAULT_MIX } from '@/lib/audio/tokens'
@@ -81,24 +86,62 @@ afterEach(() => {
 })
 
 describe('the patterns', () => {
-  it('keeps every pattern under 90 ms of motor time', () => {
-    // Raised from 60 ms in 8.10: the old ceiling produced pulses that were
-    // technically correct and physically imperceptible. Still far below the
-    // point where a pattern stops being a tap and becomes a buzz.
+  it('keeps every pattern inside the motor-time ceiling', () => {
+    // 60 ms in 8.9, 90 ms in 8.10, 220 ms here — and the ceiling is not the
+    // interesting number, the *shape* is: nothing below spends its budget on one
+    // long pulse (see the buzz test).
     for (const name of patternNames) {
-      expect(motorTime(name)).toBeLessThanOrEqual(90)
+      expect(motorTime(name), name).toBeLessThanOrEqual(MAX_MOTOR_MS)
     }
   })
 
   it('makes every pulse long enough to actually be felt', () => {
-    // The 8.9 set had 4 ms pulses. An LRA has barely spun up by then, so the
-    // pattern was a rumour rather than a tap — which is exactly the complaint
-    // this phase exists to answer.
+    /*
+     * The measurement this phase turned on. 8.9 shipped 4 ms pulses and 8.10
+     * shipped 8 ms ones; on an LRA neither has finished spinning up, so both
+     * were technically correct and physically absent. 14 ms is the floor where
+     * something reaches the surface of the case, and the lightest pattern in the
+     * set sits above it rather than on it.
+     */
     for (const name of patternNames) {
-      const value = PATTERNS[name]
-      const pulses = typeof value === 'number' ? [value] : value.filter((_, i) => i % 2 === 0)
-      for (const pulse of pulses) expect(pulse).toBeGreaterThanOrEqual(MIN_PERCEPTIBLE_MS)
+      for (const pulse of pulses(name)) {
+        expect(pulse, name).toBeGreaterThanOrEqual(MIN_PERCEPTIBLE_MS)
+      }
     }
+    expect(Math.min(...patternNames.flatMap((name) => pulses(name)))).toBeGreaterThan(15)
+  })
+
+  it('is decisively stronger than the set it replaced', () => {
+    // The regression guard for the actual complaint: someone re-tuning this file
+    // downward would be undoing the fix. A tap has to be a tap.
+    expect(PATTERNS.select).toBeGreaterThanOrEqual(40)
+    expect(motorTime('commit')).toBeGreaterThanOrEqual(120)
+    expect(motorTime('stake')).toBeGreaterThan(motorTime('commit'))
+  })
+
+  it('never spends its weight on one long pulse', () => {
+    // Weight comes from a second, heavier stage after a gap — a mechanism
+    // seating. A single pulse held longer is a buzz, which is the one thing the
+    // whole system is trying not to be.
+    for (const name of patternNames) {
+      for (const pulse of pulses(name)) expect(pulse, name).toBeLessThanOrEqual(MAX_PULSE_MS)
+    }
+  })
+
+  it('classifies exactly the patterns a player produces deliberately as decisive', () => {
+    // Only these may interrupt the anti-buzz floor. If a light pattern is ever
+    // promoted here, hovering becomes able to buzz.
+    const decisive = patternNames.filter((name) => isDecisive(name)).sort()
+    expect(decisive).toEqual([
+      'affirm',
+      'commit',
+      'discover',
+      'mark',
+      'milestone',
+      'select',
+      'stake',
+    ])
+    expect(Object.keys(WEIGHT).sort()).toEqual([...patternNames].sort())
   })
 
   it('gives every pattern a distinct shape, not just a distinct length', () => {
@@ -116,12 +159,10 @@ describe('the patterns', () => {
   })
 
   it('never repeats a pulse more than three times', () => {
-    // Structure is allowed — a mechanism has two stages. Repetition for
-    // emphasis is how buzzing starts.
+    // Structure is allowed — a mechanism has two stages, a stake has three.
+    // Repetition for emphasis is how buzzing starts.
     for (const name of patternNames) {
-      const value = PATTERNS[name]
-      const pulses = typeof value === 'number' ? 1 : Math.ceil(value.length / 2)
-      expect(pulses).toBeLessThanOrEqual(3)
+      expect(pulses(name).length, name).toBeLessThanOrEqual(3)
     }
   })
 
@@ -134,6 +175,8 @@ describe('the patterns', () => {
 describe('unsupported devices', () => {
   it('reports no support and does not throw when the API is absent', async () => {
     vi.stubGlobal('navigator', {})
+    // No switch-capable engine either, so there is genuinely no backend.
+    vi.stubGlobal('document', { ...(globalThis.document as object), createElement: () => ({}) })
     const { hapticsSupported, vibrate } = await loadHaptics()
 
     expect(hapticsSupported()).toBe(false)
@@ -152,6 +195,92 @@ describe('unsupported devices', () => {
 
     expect(() => vibrate('commit')).not.toThrow()
     expect(vibrate('commit')).toBe(false)
+  })
+})
+
+describe('the second backend — iOS, where the Vibration API does not exist', () => {
+  /**
+   * Install a switch-capable engine and no `navigator.vibrate`.
+   *
+   * This is an iPhone. It is also, until 8.11, the configuration in which the
+   * entire haptic system was silently dead — and iOS is not an edge case, so
+   * "unsupported" was the wrong answer for half the phones in existence.
+   */
+  function installSwitchEngine(): { clicks: number } {
+    const state = { clicks: 0 }
+    const body = {
+      append: () => undefined,
+    }
+    vi.stubGlobal('navigator', {})
+    vi.stubGlobal('document', {
+      hidden: false,
+      body,
+      documentElement: { style: { setProperty: () => undefined, removeProperty: () => undefined } },
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      createElement: () => ({
+        switch: false,
+        style: { cssText: '' },
+        isConnected: true,
+        setAttribute: () => undefined,
+        remove: () => undefined,
+        click: () => {
+          state.clicks += 1
+        },
+      }),
+    })
+    return state
+  }
+
+  it('reports the switch backend rather than claiming no support', async () => {
+    installSwitchEngine()
+    const { hapticBackend, hapticsSupported } = await loadHaptics()
+
+    expect(hapticBackend()).toBe('switch')
+    expect(hapticsSupported()).toBe(true)
+  })
+
+  it('produces one system tap for a light pattern and two for a decisive one', async () => {
+    const state = installSwitchEngine()
+    const { vibrate, resetHapticThrottles } = await loadHaptics()
+
+    expect(vibrate('brush')).toBe(true)
+    expect(state.clicks).toBe(1)
+
+    resetHapticThrottles()
+    expect(vibrate('commit')).toBe(true)
+    expect(state.clicks).toBe(2)
+    // One echo, and exactly one: this backend has no shape, so weight is
+    // expressed as a second tap and never as more than that.
+    await new Promise((done) => setTimeout(done, 160))
+    expect(state.clicks).toBe(3)
+  })
+
+  it('still obeys every preference gate', async () => {
+    const state = installSwitchEngine()
+    const { vibrate, setAudioMix: setMix } = await loadHaptics()
+
+    setMix({ haptics: false })
+    expect(vibrate('commit')).toBe(false)
+    expect(state.clicks).toBe(0)
+  })
+
+  it('prefers the real API wherever it exists', async () => {
+    // A device with both must never be tapped through a hidden control.
+    const state = installSwitchEngine()
+    const calls: number[][] = []
+    vi.stubGlobal('navigator', {
+      vibrate: (pattern: number | number[]) => {
+        calls.push(Array.isArray(pattern) ? pattern : [pattern])
+        return true
+      },
+    })
+    const { hapticBackend, vibrate } = await loadHaptics()
+
+    expect(hapticBackend()).toBe('vibration')
+    expect(vibrate('commit')).toBe(true)
+    expect(calls).toHaveLength(1)
+    expect(state.clicks).toBe(0)
   })
 })
 
@@ -209,15 +338,71 @@ describe('the gates', () => {
 })
 
 describe('throttling', () => {
-  it('refuses a second pulse inside the global floor', async () => {
+  it('refuses a second light pulse inside the global floor', async () => {
     const calls = installMotor()
     const { vibrate } = await loadHaptics()
 
-    expect(vibrate('select')).toBe(true)
-    // Immediately after: two pulses that close together are one buzz.
-    expect(vibrate('select')).toBe(false)
-    expect(vibrate('commit')).toBe(false)
+    expect(vibrate('brush')).toBe(true)
+    // Immediately after: two light pulses that close together are one buzz.
+    expect(vibrate('brush')).toBe(false)
+    expect(vibrate('glint')).toBe(false)
     expect(calls).toHaveLength(1)
+  })
+
+  it('never holds back something the player deliberately did', async () => {
+    /*
+     * The bug 8.11 exists to fix, at the layer it lived in. The floor is an
+     * anti-*repetition* device, and applying it to commitments meant a hover 40
+     * ms earlier could swallow the single most important pulse in the product.
+     * A decisive pattern always reaches the motor.
+     */
+    const calls = installMotor()
+    const { vibrate } = await loadHaptics()
+
+    expect(vibrate('brush')).toBe(true)
+    expect(vibrate('select')).toBe(true)
+    expect(vibrate('commit')).toBe(true)
+    expect(vibrate('stake')).toBe(true)
+    expect(calls).toHaveLength(4)
+  })
+
+  it('keys the throttle by caller, so two moments sharing a pattern do not collide', async () => {
+    const calls = installMotor()
+    const { vibrate } = await loadHaptics()
+
+    expect(vibrate('brush', { throttleMs: 5000, throttleKey: 'torch.sweep' })).toBe(true)
+    await new Promise((done) => setTimeout(done, 90))
+    // A different moment, the same pattern, inside the first one's window.
+    expect(vibrate('brush', { throttleMs: 320, throttleKey: 'choice.hover' })).toBe(true)
+    // The original key is still held.
+    expect(vibrate('brush', { throttleMs: 5000, throttleKey: 'torch.sweep' })).toBe(false)
+    expect(calls).toHaveLength(2)
+  })
+
+  it('schedules a delayed pulse instead of dropping it', async () => {
+    const calls = installMotor()
+    const { vibrate } = await loadHaptics()
+
+    expect(vibrate('affirm')).toBe(true)
+    // A phrased reveal: same tick, later beat. Before 8.11 this returned false
+    // and the beat was simply never felt.
+    expect(vibrate('mark', { delayMs: 120 })).toBe(true)
+    expect(calls).toHaveLength(1)
+
+    await new Promise((done) => setTimeout(done, 200))
+    expect(calls).toHaveLength(2)
+  })
+
+  it('re-checks the preferences when a delayed pulse lands, not when it was asked for', async () => {
+    const calls = installMotor()
+    const { vibrate, setAudioMix: setMix } = await loadHaptics()
+
+    vibrate('mark', { delayMs: 60 })
+    // The player silences the product inside the phrase. The pulse must not
+    // arrive anyway.
+    setMix({ muted: true })
+    await new Promise((done) => setTimeout(done, 140))
+    expect(calls).toHaveLength(0)
   })
 
   it('holds a mash to a single pulse', async () => {
@@ -228,7 +413,7 @@ describe('throttling', () => {
     expect(calls).toHaveLength(1)
   })
 
-  it('honours a longer per-pattern throttle on top of the floor', async () => {
+  it('honours a longer per-key throttle on top of the floor', async () => {
     const calls = installMotor()
     const { vibrate } = await loadHaptics()
 

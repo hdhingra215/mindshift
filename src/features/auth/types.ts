@@ -29,6 +29,8 @@ export type AuthContextValue = {
   user: User | null
   session: Session | null
   signIn: (email: string, password: string) => Promise<AuthResult>
+  /** Redirects to Google; resolves with an error only if the redirect failed. */
+  signInWithGoogle: (intendedPath?: string) => Promise<AuthResult>
   signUp: (input: SignUpInput) => Promise<SignUpResult>
   signOut: () => Promise<void>
   requestPasswordReset: (email: string) => Promise<AuthResult>

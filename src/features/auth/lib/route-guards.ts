@@ -1,5 +1,6 @@
 import { redirect } from '@tanstack/react-router'
 import type { AuthContextValue } from '../types'
+import { safeInternalPath } from './redirects'
 
 /**
  * Route guards, consumed from `beforeLoad` via the router's auth context.
@@ -16,9 +17,18 @@ export function requireAuth(auth: AuthContextValue, href: string): void {
   }
 }
 
-/** Keep signed-in players out of the public auth pages. */
-export function redirectIfAuthenticated(auth: AuthContextValue): void {
+/**
+ * Keep signed-in players out of the public auth pages.
+ *
+ * `intendedPath` carries the destination a visitor was originally bounced from
+ * (`?redirect=`), so an OAuth round trip that lands back on login forwards to
+ * where the player was headed. Validated as internal to avoid open redirects.
+ */
+export function redirectIfAuthenticated(
+  auth: AuthContextValue,
+  intendedPath?: string,
+): void {
   if (auth.status === 'authenticated') {
-    throw redirect({ to: '/dashboard' })
+    throw redirect({ href: safeInternalPath(intendedPath) })
   }
 }

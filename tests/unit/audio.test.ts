@@ -43,9 +43,20 @@ const cueNames = Object.keys(CUES) as CueName[]
  */
 const layersOf = (name: CueName): readonly CueLayer[] => CUES[name].layers
 
+/**
+ * How long one layer occupies, in seconds.
+ *
+ * A synthesised layer's length is its envelope. A recorded one's is the window
+ * it plays — which is what keeps the "nothing but the milestone rings for over a
+ * second" rule enforceable now that three materials carry a recording: an
+ * untrimmed sample would show up here as the second it actually lasts.
+ */
+const lengthOf = (layer: CueLayer): number =>
+  layer.kind === 'sample' ? (layer.duration ?? 0) : layer.attack + layer.decay
+
 /** When the last of a cue's layers finishes, in seconds. */
 const spanOf = (name: CueName): number =>
-  Math.max(...layersOf(name).map((layer) => (layer.at ?? 0) + layer.attack + layer.decay))
+  Math.max(...layersOf(name).map((layer) => (layer.at ?? 0) + lengthOf(layer)))
 
 /** The loudest single layer in a cue. */
 const peakOf = (name: CueName): number => Math.max(...layersOf(name).map((layer) => layer.gain))
@@ -181,9 +192,81 @@ describe('momentum resolves the world — it does not turn it up', () => {
 
 describe('the material catalogue', () => {
   it('stays small — a restrained language, not a sound per event', () => {
-    // The moment this grows past a dozen the product has stopped having a sonic
-    // identity and started having sounds.
-    expect(cueNames.length).toBeLessThanOrEqual(12)
+    // Nine synthesised materials plus the four 8.11 added, three of which carry
+    // a recording. Past this the product has stopped having a sonic identity and
+    // started having sounds.
+    expect(cueNames.length).toBeLessThanOrEqual(13)
+  })
+
+  it('leaves the nine original materials exactly as they were', () => {
+    /*
+     * The approved sound. 8.11 was asked for *additions* — a glint on the bias
+     * field, an entry action, a heavier stake, a rail that advances — and
+     * explicitly not for a retune of anything already shipped. This asserts the
+     * negative: the original nine still have the layer counts, peaks and spans
+     * they had, so a future "while I'm in here" edit to the approved catalogue
+     * fails the suite instead of shipping.
+     */
+    const approved: Record<string, { layers: number; peak: number; throttleMs: number }> = {
+      graze: { layers: 1, peak: 0.09, throttleMs: 90 },
+      wood: { layers: 3, peak: 0.34, throttleMs: 55 },
+      seat: { layers: 4, peak: 0.42, throttleMs: 260 },
+      bloom: { layers: 3, peak: 0.24, throttleMs: 380 },
+      shade: { layers: 3, peak: 0.24, throttleMs: 380 },
+      ring: { layers: 3, peak: 0.2, throttleMs: 700 },
+      tick: { layers: 1, peak: 0.075, throttleMs: 70 },
+      air: { layers: 1, peak: 0.15, throttleMs: 220 },
+      veil: { layers: 1, peak: 0.07, throttleMs: 900 },
+    }
+
+    for (const [name, expected] of Object.entries(approved)) {
+      const cue = name as CueName
+      expect(layersOf(cue), name).toHaveLength(expected.layers)
+      expect(peakOf(cue), name).toBeCloseTo(expected.peak, 5)
+      expect(CUES[cue].throttleMs, name).toBe(expected.throttleMs)
+      // And none of them became a recording.
+      for (const layer of layersOf(cue)) expect(layer.kind).not.toBe('sample')
+    }
+  })
+
+  it('trims every recording to a gesture rather than playing a file at the player', () => {
+    // A recorded material is a *material*: it has to be as short as the act it
+    // marks. An untrimmed 1.8 s reel on a scroll crossing would be the single
+    // most annoying thing in the product.
+    for (const name of cueNames) {
+      for (const layer of layersOf(name)) {
+        if (layer.kind !== 'sample') continue
+        expect(layer.duration ?? 0, `${name} plays an untrimmed sample`).toBeGreaterThan(0)
+        expect(layer.duration ?? 0, `${name} sample runs long`).toBeLessThanOrEqual(0.6)
+      }
+    }
+  })
+
+  it('gives every recorded material a synthesised layer to fall back on', () => {
+    // A sample that has not finished decoding is skipped, so a cue made only of
+    // recordings would be silent on its first use of a session.
+    for (const name of cueNames) {
+      const layers = layersOf(name)
+      if (!layers.some((layer) => layer.kind === 'sample')) continue
+      expect(
+        layers.some((layer) => layer.kind !== 'sample'),
+        `${name} is nothing but a recording`,
+      ).toBe(true)
+    }
+  })
+
+  it('makes the stake heavier than the answer it follows', () => {
+    // Committing an answer costs the answer. Committing Insight costs something
+    // the player earned, and the two must not sound alike.
+    expect(peakOf('stake')).toBeGreaterThan(peakOf('seat'))
+    expect(spanOf('stake')).toBeGreaterThan(spanOf('seat'))
+  })
+
+  it('keeps the bias glint the quietest thing in the product', () => {
+    // It fires on hover across twelve neighbours. Quieter than the torch, which
+    // was the previous floor.
+    expect(peakOf('glint')).toBeLessThan(peakOf('veil'))
+    expect(peakOf('glint')).toBeLessThan(peakOf('tick'))
   })
 
   it('contains no sustained pitch anywhere', () => {

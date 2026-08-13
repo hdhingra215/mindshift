@@ -159,6 +159,85 @@ export const CUES = {
       { kind: 'strike', band: 1400, bandTo: 620, q: 0.9, gain: 0.07, space: 0.45, attack: 0.09, decay: 0.42 },
     ],
   },
+
+  /* ── 8.11: four materials, for four moments the first nine could not reach ──
+   *
+   * Three of them carry a recording (`assets/sounds/soundcn-*.mp3`). None of
+   * them replaces or retunes anything above — the nine synthesised materials are
+   * unchanged, and so is the environment.
+   */
+
+  /**
+   * **glint** — a blind spot lighting up. Something noticed, not something done.
+   *
+   * The quietest material in the product, and the highest: two hairlines a
+   * breath apart, well into the room, with no body at all. It has to read as a
+   * point of light catching rather than as an interface responding — which is
+   * why it is glass and air, has no transient weight, and sits below `tick`.
+   */
+  glint: {
+    throttleMs: 140,
+    layers: [
+      { kind: 'strike', band: RESONANCE.glass, q: 18, gain: 0.055, space: 0.42, ...ENVELOPE.graze },
+      { kind: 'strike', band: RESONANCE.glass * 1.9, q: 24, gain: 0.03, at: 0.045, space: 0.5, ...ENVELOPE.strike },
+    ],
+  },
+
+  /**
+   * **enter** — the one action that takes the player into the product.
+   *
+   * A switch closing (`switch-001`) over the chest body the commitment
+   * materials use. The recording gives it a mechanical, unmistakably *physical*
+   * top that noise-through-a-resonator cannot produce; the body under it is what
+   * keeps it in the same family as everything else rather than sounding like a
+   * borrowed sample. Used exactly once on the page, which is what earns it.
+   */
+  enter: {
+    throttleMs: 600,
+    layers: [
+      { kind: 'sample', sample: 'switch', gain: 0.5, rate: 1.04, duration: 0.42, space: 0.18 },
+      { kind: 'body', freq: 210, glideTo: 72, gain: 0.34, cutoff: 300, attack: 0.002, decay: 0.24 },
+      { kind: 'strike', band: RESONANCE.chest, q: 8, gain: 0.16, at: 0.03, space: 0.12, ...ENVELOPE.tap },
+    ],
+  },
+
+  /**
+   * **stake** — Insight goes on the line.
+   *
+   * `seat` with a weight landing on it: the same two-stage mechanism, plus a
+   * short recorded drop (`drop-003`) on the second stage and a lower, longer
+   * body. Deliberately heavier than `seat` — committing an answer costs nothing
+   * but the answer, and this one costs something the player earned.
+   */
+  stake: {
+    throttleMs: 300,
+    layers: [
+      { kind: 'strike', band: RESONANCE.wood * 0.7, q: 5, gain: 0.28, ...ENVELOPE.tap },
+      { kind: 'body', freq: 180, glideTo: 62, gain: 0.44, cutoff: 240, attack: 0.002, decay: 0.24 },
+      { kind: 'sample', sample: 'drop', gain: 0.5, rate: 0.92, duration: 0.19, at: 0.085, space: 0.14 },
+      { kind: 'body', freq: 108, glideTo: 48, gain: 0.26, cutoff: 170, at: 0.085, attack: 0.003, decay: 0.36, space: 0.1 },
+    ],
+  },
+
+  /**
+   * **reel** — the progression rail advancing under a scroll.
+   *
+   * The first third of a reel being wound in (`fish-reel-in`), rate-shifted down
+   * and trimmed to a gesture. It is the one material with a *mechanical
+   * continuity* to it, which is exactly what a line being drawn down the page
+   * needs: something is being pulled, and the pull has a length.
+   *
+   * Quiet and short by necessity — it can fire a few times per section — and
+   * heavily throttled at the moment above it. The rail's reverse crossing stays
+   * silent (see `rail.return`); winding back is not an event.
+   */
+  reel: {
+    throttleMs: 520,
+    layers: [
+      { kind: 'sample', sample: 'reel', gain: 0.3, rate: 0.86, duration: 0.5, release: 0.14, space: 0.3 },
+      { kind: 'strike', band: RESONANCE.filament, q: 14, gain: 0.05, space: 0.2, ...ENVELOPE.graze },
+    ],
+  },
 } as const satisfies Record<string, CueSpec>
 
 export type CueName = keyof typeof CUES

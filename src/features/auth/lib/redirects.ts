@@ -19,3 +19,18 @@ export function safeInternalPath(
   }
   return fallback
 }
+
+/**
+ * Absolute URL Supabase sends the browser back to after a Google round trip.
+ *
+ * Always the login route: it is public, so a cancelled or failed consent lands
+ * somewhere that can *explain* itself instead of bouncing off a route guard,
+ * and a successful one is forwarded on by `redirectIfAuthenticated` using the
+ * preserved `redirect` intent. Built from `window.location.origin`, so the same
+ * code produces the production and the localhost callback — nothing hardcoded.
+ * The resulting origin must be allow-listed in Supabase → Auth → URL config.
+ */
+export function oauthCallbackUrl(intendedPath?: string): string {
+  const next = encodeURIComponent(safeInternalPath(intendedPath))
+  return callbackUrl(`/auth/login?redirect=${next}`)
+}

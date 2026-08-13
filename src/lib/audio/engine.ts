@@ -1,4 +1,10 @@
-import { MAX_VOICES, ROOM_DAMPING, ROOM_SECONDS, type CueLayer } from './tokens'
+import {
+  MAX_VOICES,
+  ROOM_DAMPING,
+  ROOM_SECONDS,
+  type CueLayer,
+  type SampleName,
+} from './tokens'
 import { getAudioMix, resolveGains, subscribeAudioMix } from './preferences'
 
 /**
@@ -265,6 +271,9 @@ export function armAudio(): () => void {
     graph = null
     armed = false
     activeVoices = 0
+    // Buffers belong to the closed context; keeping them would hand the next
+    // graph nodes it cannot play.
+    sampleBuffers.clear()
   }
 }
 
@@ -285,6 +294,28 @@ export async function loadSample(url: string): Promise<AudioBuffer | null> {
   } catch {
     return null
   }
+}
+
+/**
+ * The decoded recorded materials, held beside the graph they belong to.
+ *
+ * The registry lives here rather than in `samples.ts` so the dependency runs
+ * one way — the layer that knows about asset URLs depends on the engine, never
+ * the reverse. A decoded buffer is bound to the context that decoded it, so it
+ * is dropped with the graph in the teardown below.
+ */
+const sampleBuffers = new Map<SampleName, AudioBuffer>()
+
+export function setSampleBuffer(name: SampleName, buffer: AudioBuffer): void {
+  sampleBuffers.set(name, buffer)
+}
+
+export function getSample(name: SampleName): AudioBuffer | null {
+  return sampleBuffers.get(name) ?? null
+}
+
+export function clearSampleBuffers(): void {
+  sampleBuffers.clear()
 }
 
 /**
@@ -409,6 +440,58 @@ function playStrike(target: Graph, layer: Extract<CueLayer, { kind: 'strike' }>,
 }
 
 /**
+ * A recorded material.
+ *
+ * The one layer kind whose sound is not generated. It still passes through the
+ * same amplitude shaping, the same sfx bus and the same room send as a strike,
+ * so a recording sits in the product's space rather than on top of it — and it
+ * is trimmed and rate-shifted at playback (`offset`, `duration`, `rate`) so one
+ * file can serve a short gesture without a second asset.
+ *
+ * Skipped silently while the buffer is still decoding. Every cue that uses a
+ * sample also has synthesised layers, so the moment is never silent — it is
+ * briefly less rich, on the first use of a session at most.
+ */
+function playSampleLayer(
+  target: Graph,
+  layer: Extract<CueLayer, { kind: 'sample' }>,
+  at: number,
+): void {
+  const buffer = sampleBuffers.get(layer.sample) ?? null
+  if (!buffer) return
+  if (!claimVoice()) return
+
+  const { ctx } = target
+  const rate = layer.rate ?? 1
+  const offset = Math.min(layer.offset ?? 0, buffer.duration)
+  const available = (buffer.duration - offset) / rate
+  const window = Math.min(layer.duration ?? available, available)
+  const release = Math.min(layer.release ?? 0.04, window)
+
+  const source = ctx.createBufferSource()
+  source.buffer = buffer
+  source.playbackRate.setValueAtTime(rate, at)
+
+  const amp = ctx.createGain()
+  amp.gain.setValueAtTime(layer.gain, at)
+  // A trimmed window ends mid-waveform, which is a click. Ramped to a floor
+  // rather than to zero for the same reason `shape` is.
+  amp.gain.setValueAtTime(layer.gain, at + window - release)
+  amp.gain.exponentialRampToValueAtTime(0.0001, at + window)
+
+  source.connect(amp)
+  amp.connect(target.sfx)
+  if (layer.space) sendToRoom(target, amp, layer.space, at)
+
+  source.onended = () => {
+    releaseVoice()
+    source.disconnect()
+    amp.disconnect()
+  }
+  source.start(at, offset, window * rate)
+}
+
+/**
  * Schedule the layers of one cue as a single event.
  *
  * All layers are scheduled against one start time on the audio clock, so their
@@ -423,6 +506,7 @@ export function emit(layers: readonly CueLayer[], delaySeconds = 0): void {
   for (const layer of layers) {
     const at = start + (layer.at ?? 0)
     if (layer.kind === 'body') playBody(graph, layer, at)
+    else if (layer.kind === 'sample') playSampleLayer(graph, layer, at)
     else playStrike(graph, layer, at)
   }
 }

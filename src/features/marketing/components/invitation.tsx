@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { ArrowRight } from 'lucide-react'
 
 import { AnimatedButton, MagneticButton, SpotlightContainer } from '@/components/motion'
+import { signal } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
 type InvitationProps = {
@@ -60,7 +61,25 @@ export function Invitation({ isAuthed, hasPlayed, caught, className }: Invitatio
       </p>
 
       <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-        <MagneticButton asChild className="w-full sm:w-auto" size="lg">
+        <MagneticButton
+          asChild
+          className="w-full sm:w-auto"
+          /*
+           * The page's one entry action, and the only navigation in the product
+           * that is treated as a decision: a switch closing, and the same
+           * two-stage weight in the hand that committing an answer has. Ordinary
+           * navigation stays silent and still — see `moments.ts`.
+           */
+          moment="cta.enter"
+          // Approaching it is already marked visually by the magnet; this adds
+          // the same light touch an option gets, and the same 320 ms throttle
+          // keeps a cursor resting on the button from repeating it.
+          onFocus={() => signal('choice.hover')}
+          onPointerEnter={(event) => {
+            if (event.pointerType === 'mouse') signal('choice.hover')
+          }}
+          size="lg"
+        >
           <Link to={isAuthed ? '/dashboard' : '/auth/signup'}>
             {isAuthed ? 'Continue training' : 'Start training'}
             <ArrowRight aria-hidden="true" className="size-4" />

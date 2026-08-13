@@ -163,7 +163,43 @@ export type StrikeLayer = {
   space?: number
 }
 
-export type CueLayer = BodyLayer | StrikeLayer
+/**
+ * The recorded materials, by name.
+ *
+ * Three short CC0 recordings (`assets/sounds/LICENSE.md`), added in 8.11 for
+ * the three moments a synthesised material could not reach: a switch closing
+ * under the page's one entry action, a weight dropping onto a stake, and
+ * something being reeled in as the progression rail advances. They are played
+ * *as layers of a cue*, through the same sfx bus, room send and limiter as
+ * everything else — a recording is a material here, not a second sound system.
+ */
+export type SampleName = 'switch' | 'drop' | 'reel'
+
+/**
+ * A recorded material.
+ *
+ * `offset` and `duration` trim the file at playback, so one recording can serve
+ * as a short gesture without a second asset: the reel is 1.8 s and the rail
+ * uses the first third of it. Trimming here rather than in the file keeps the
+ * asset honest — what shipped is what was downloaded.
+ */
+export type SampleLayer = {
+  kind: 'sample'
+  sample: SampleName
+  gain: number
+  /** Playback rate. Below 1 is larger and slower; above is smaller and quicker. */
+  rate?: number
+  /** Where in the recording to start, seconds. */
+  offset?: number
+  /** How much of it to play, seconds. Omitted plays to the end. */
+  duration?: number
+  /** Fade-out applied over the tail of that window, seconds. No clicks. */
+  release?: number
+  at?: number
+  space?: number
+}
+
+export type CueLayer = BodyLayer | StrikeLayer | SampleLayer
 
 export type CueSpec = {
   /** Layers of one event. Never two events pretending to be one. */

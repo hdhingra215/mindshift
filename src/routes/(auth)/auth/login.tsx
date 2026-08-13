@@ -1,12 +1,20 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { AuthShell, LoginForm, redirectIfAuthenticated } from '@/features/auth'
+import {
+  AuthShell,
+  ContinueWithGoogle,
+  LoginForm,
+  redirectIfAuthenticated,
+  toFriendlyOAuthError,
+} from '@/features/auth'
 
 type LoginSearch = {
   redirect?: string
+  /** Provider error code appended by Supabase on a failed/cancelled callback. */
+  error?: string
 }
 
 function LoginPage() {
-  const { redirect } = Route.useSearch()
+  const { redirect, error } = Route.useSearch()
 
   return (
     <AuthShell
@@ -25,6 +33,10 @@ function LoginPage() {
       }
     >
       <LoginForm redirectTo={redirect} />
+      <ContinueWithGoogle
+        redirectTo={redirect}
+        callbackError={error ? toFriendlyOAuthError(error) : undefined}
+      />
     </AuthShell>
   )
 }
@@ -32,7 +44,13 @@ function LoginPage() {
 export const Route = createFileRoute('/(auth)/auth/login')({
   validateSearch: (search: Record<string, unknown>): LoginSearch => ({
     redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
+    error:
+      typeof search.error_code === 'string'
+        ? search.error_code
+        : typeof search.error === 'string'
+          ? search.error
+          : undefined,
   }),
-  beforeLoad: ({ context }) => redirectIfAuthenticated(context.auth),
+  beforeLoad: ({ context, search }) => redirectIfAuthenticated(context.auth, search.redirect),
   component: LoginPage,
 })

@@ -125,7 +125,7 @@ src/
   styles/globals.css   all design tokens + depth/lighting utilities
 supabase/migrations/   22 migrations — schema, seed, XP/mastery/achievements/streaks/twin/wagers
 supabase/functions/    EMPTY — no edge functions yet, and the Twin needs none
-tests/unit/            Vitest — pure client logic, audio, haptics, feedback (198 tests)
+tests/unit/            Vitest — pure client logic, audio, haptics, feedback (233 tests)
 tests/integration/     Vitest against the live project (54 tests)
 ```
 
@@ -500,7 +500,7 @@ It also corrected a documentation error: `evaluate_achievements`, `refresh_playe
 
 ---
 
-### 5.7 Audio & Haptics (Phase 8.8, redesigned in 8.9, haptics rebuilt in 8.10)
+### 5.7 Audio & Haptics (Phase 8.8, redesigned in 8.9, haptics rebuilt in 8.10, final feedback pass in 8.11)
 
 `src/lib/audio/` · `src/lib/haptics/` · `src/lib/feedback/` · `src/components/feedback/`. **Read [AudioSystem.md](../architecture/AudioSystem.md) before touching any of it** — this section is the state, that file is the contract.
 
@@ -508,8 +508,8 @@ It also corrected a documentation error: `evaluate_achievements`, `refresh_playe
 
 | Layer | Owns |
 |---|---|
-| `lib/audio` | Nine **materials**, the Web Audio graph, and the recorded environment |
-| `lib/haptics` | Seven patterns, and **the only `navigator.vibrate` in the codebase** |
+| `lib/audio` | Thirteen **materials** (nine synthesised, three carrying a recording, all one graph), the Web Audio graph, and the recorded environment |
+| `lib/haptics` | Eleven patterns, two backends, and **the only `navigator.vibrate` in the codebase** |
 | `lib/feedback` | The **moment table** — which acts are worth marking, and how hard |
 
 **Components import `@/lib/feedback` and nothing below it.** They name an act (`signal('answer.commit')`), never a sound or a vibration. That seam is why 8.9 replaced every sound in the product without changing a single call site.
@@ -522,15 +522,27 @@ It also corrected a documentation error: `evaluate_achievements`, `refresh_playe
 
 ⚠ **Invariants asserted in the unit suite; do not relax them.** Momentum may change openness and space but never level or rate. `shade`/`bloom`, `wager.win`/`wager.loss` and `twin.hit`/`twin.miss` carry identical weight in both channels. Every material sits between −24 and −6 dBFS at default preferences. No sustained pitch exists in the catalogue. `navigator.vibrate` appears in exactly one file.
 
-**Landing page.** The torch sweep is bound to pointer movement with a 1.6 s moment throttle; the decision gets hover feedback, a commitment, and a phrased reveal; the loop rail fires one pulse per stop crossed, driven by a `MotionValue` subscription rather than React state.
+**Landing page.** The torch sweep is bound to pointer movement with a 1.6 s moment throttle; the decision gets hover feedback, a commitment, and a phrased reveal; the twelve blind spots each glint on approach, tap or focus; Start Training carries the entry moment; the loop rail fires one pulse per stop crossed — with a sound going down and silence coming back up — driven by a `MotionValue` subscription rather than React state.
 
 **8.10 — haptics only. Not one audio value changed.** The patterns were 2–3× too weak to feel (pulses as short as 4 ms), so the ceiling moved from 60 ms to 90 ms of motor time and every pattern was given a distinct *shape* — single, rising, falling, symmetrical, crescendo — rather than a distinct length. All 21 moments now carry a haptic, including navigation (`route.change`, **felt but still silent**). A `hapticIntensity` slider scales pulse durations while holding the gaps, with an 8 ms perceptibility floor; Settings gained it plus a reset-to-defaults.
 
-⚠ **The hardware truth, and it is not a bug to be fixed.** `navigator.vibrate` is **not implemented in Safari on iOS or macOS, in any version**, and Firefox removed it in 129. There is no web API for the iPhone Taptic Engine or a Mac trackpad. Everything in this section is real on Android and a clean no-op everywhere else; the Settings copy says so. Reaching Apple's haptics needs a native wrapper — a product decision, not an implementation gap.
+**8.11 — the final feedback polish pass. The approved ambience and the nine original materials were not touched.**
+
+*Why haptics still could not be felt after 8.10, in three parts:*
+
+1. **The scale was chosen against an intention, not a motor.** 8.10's 8 ms floor is below an LRA's spin-up; a 26 ms "clean tap" is the *threshold* of noticing. The floor is now 14 ms, `select` is 45 ms, `commit` is 130 ms, and the ceiling is 220 ms of motor time with no single pulse over 100 ms (weight comes from a second stage, never from a longer pulse).
+2. **The anti-buzz floor was eating the best moments.** It applied to every pattern, so a hover pulse 40 ms before a click swallowed the commitment — dead exactly where it should feel certain. Patterns are now `light` or `decisive`, and only light ones queue behind the floor. Separately, haptics ignored the `PHRASE` ladder, so a reveal screen firing outcome + wager + mastery + XP in one tick kept the first pulse and dropped the rest; each is now scheduled at its own beat, with its gates re-checked when it lands.
+3. **On iOS there was no backend at all.** See below.
+
+*New moments (four):* `bias.spark` (the twelve blind spots — new `glint` material, a halo flash, throttled at 220 ms, wired to pointer, tap **and** keyboard), `cta.enter` (Start Training — new `enter` material, `commit` weight), `rail.advance` / `rail.return` (the loop rail, direction-aware: forward sounds and is felt, backward is felt and silent). `wager.commit` was split off `answer.commit` onto its own heavier material (`stake`) and pattern — a stake must not feel like an answer. Throttle keys are now the *moment*, not the pattern, so the torch no longer silences the next option hover.
+
+*Three CC0 recordings, no second engine.* `@soundcn/switch-001`, `@soundcn/drop-003`, `@soundcn/fish-reel-in` — Soundcn ships each as a base64 data URI **plus its own `AudioContext` and `useSound` hook**. Only the assets were taken (decoded to `src/assets/sounds/soundcn-*.mp3`, 23 kB total, provenance in that directory's LICENSE.md); they play as `sample` layers of ordinary cues through the same sfx bus, room send and limiter. **No dependency was added.**
+
+⚠ **The hardware truth, updated in 8.11.** `navigator.vibrate` is still **not implemented in Safari on iOS or macOS**, and Firefox removed it in 129. There is no web API for the Taptic Engine. But since Safari 17.4 an `<input type="checkbox" switch>` produces a system haptic when toggled, and the engine now drives one hidden control as a **second backend** — one tap for a light pattern, two for a decisive one. Its limits are documented and not worked around: no shape, no duration, gesture-only (so mount-time reveal pulses feel nothing there), and it is used only where the real API is absent. Settings says so, and the strength slider's copy changes to on/off on that backend. **Desktop still has no motor and nothing depends on a pulse being felt.** iOS behaviour is the one thing in this section that has not been verified on real hardware by the owner.
 
 ⚠ **Autoplay has a ceiling too.** The context is built and resumed at mount, unprompted, and `getAutoplayPolicy()` is consulted where it exists so the mute control can say *waiting for your first tap* rather than looking broken. But truly automatic first-visit playback is impossible in Chrome, Safari and Firefox by design. A returning Chrome visitor usually gets the room on open (media-engagement history); a first-time visitor gets it on their first click. **No silent-buffer or muted-`<video>` workaround is used, and none may be added** (AudioSystem.md §3).
 
-**Haptics** are Android/Chromium only in practice — absent on iOS and desktop — so the API is a no-op returning `false` everywhere else, and nothing depends on one firing. Mute outranks the haptics switch, and reduced motion suppresses them entirely.
+**Haptics** are fully expressed on Android/Chromium, reduced to a single system tap on iOS 17.4+, and absent on desktop — where the API is a no-op returning `false`, and nothing depends on one firing. Mute outranks the haptics switch, and reduced motion suppresses them entirely.
 
 ⚠ **A latent bug the tests found:** all three throttles used `0` as the "never fired" sentinel, so every throttled moment was silently dead for its own duration after page load — exactly when a visitor first touches things. The sentinel is now `-Infinity` in all three layers.
 
@@ -565,15 +577,16 @@ Reduced motion is enforced in two layers — CSS for declarative animation, `lib
 
 ## 7. Authentication status
 
-**Complete** (`src/features/auth/`). Supabase Auth, email + password.
+**Complete** (`src/features/auth/`). Supabase Auth, email + password, plus Google OAuth.
 
 - Sign up (with email verification), sign in, sign out, password reset request, password update, resend verification.
+- **Google OAuth** (`signInWithGoogle` in `api/auth-service.ts`, `ContinueWithGoogle` on the login and signup pages). Supabase owns the whole exchange — no token handling in app code. The callback returns to `/auth/login?redirect=<intent>` built from `window.location.origin` (`oauthCallbackUrl`), so production and localhost need no separate code path; both origins must stay allow-listed in Supabase → Auth → URL configuration. `detectSessionInUrl` picks up the session, which fires `SIGNED_IN` and runs the same `ensureProfile` bootstrap as a password login (`deriveDisplayName` reads Google's `full_name` / `name`). A cancelled consent screen returns with `error_code`, surfaced through `toFriendlyOAuthError` on the login page.
 - Session persistence and rehydration via `AuthProvider`; status is `loading | authenticated | unauthenticated`.
 - Route guards `requireAuth` / `redirectIfAuthenticated` are injected through the router context so `beforeLoad` reads a resolved session synchronously.
 - Zod validation schemas, human error mapping (`lib/auth-errors.ts`) in product voice — no raw Supabase codes surface to the player.
 - `src/config/env.ts` validates client env on load and **refuses to start** if a `VITE_`-prefixed variable matches `SERVICE_ROLE|SECRET`.
 
-**Not done:** no OAuth providers, no account deletion or data export (PRD requires these before launch), no profile row bootstrapping verified against a live project, no session-expiry UX beyond the guard redirect.
+**Not done:** no OAuth provider beyond Google (and the Google flow has not yet been walked end-to-end against the deployed app), no account deletion or data export (PRD requires these before launch), no profile row bootstrapping verified against a live project, no session-expiry UX beyond the guard redirect.
 
 ---
 

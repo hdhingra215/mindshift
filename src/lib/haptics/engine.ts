@@ -1,7 +1,7 @@
 import { getAudioMix, isHapticsEnabled } from '@/lib/audio'
 import { prefersReducedMotion } from '@/lib/motion'
 
-import { scalePattern, type HapticPattern } from './patterns'
+import { isDecisive, scalePattern, type HapticPattern } from './patterns'
 
 /**
  * The haptics engine — the only place in the product that may vibrate a device.
@@ -11,15 +11,34 @@ import { scalePattern, type HapticPattern } from './patterns'
  * makes this thing buzz", and impossible to stop it doing so. Every rule about
  * restraint lives here, once.
  *
- * ── Support ─────────────────────────────────────────────────────────────────
- * Vibration is Android/Chromium only in practice. iOS Safari does not implement
- * it and desktop hardware has no motor. That is not an error case — it is the
- * majority case, and the entire API is a **no-op that returns false** wherever
- * it is unavailable. Nothing in the product may depend on a haptic firing.
+ * ── Support: two backends, because one covers half the phones ───────────────
+ * `vibrate` is the Vibration API: Android and Chromium only. **iOS has never
+ * implemented it**, in Safari or in any wrapper, so on an iPhone the entire
+ * system was silently dead — which is the other half of "I cannot feel
+ * anything", and no amount of tuning the pattern table would have fixed it.
+ *
+ * Since Safari 17.4, iOS *does* produce a genuine system haptic when a
+ * `<input type="checkbox" switch>` is toggled by a user gesture. That is the
+ * only tactile output the platform exposes to a web page. `switchTap` below
+ * drives one hidden control to reach it, which buys a single short tap with no
+ * pattern and no duration — so a shaped pattern collapses to one tap there, and
+ * a decisive one to two. That is a fair trade against nothing at all, and it is
+ * strictly a *fallback*: where the real API exists, this code never runs.
+ *
+ * Desktop has no motor under either backend and never will. That is not an
+ * error case — it is the majority case, and the whole API is a **no-op that
+ * returns false** wherever nothing can be felt. Nothing in the product may
+ * depend on a haptic firing.
  */
 
-/** Minimum gap between any two pulses, ms. The anti-buzz floor. */
-const MIN_GAP_MS = 90
+/**
+ * Minimum gap between two *light* pulses, ms. The anti-buzz floor.
+ *
+ * Applies only to light patterns (see `WEIGHT`). A decisive pattern — anything
+ * the player deliberately did — is never held back by it: until 8.11 it was,
+ * and a hover 40 ms before a click ate the commitment that followed.
+ */
+const MIN_GAP_MS = 70
 
 /**
  * "Never fired" sentinel.
@@ -33,32 +52,126 @@ const MIN_GAP_MS = 90
 const NEVER = Number.NEGATIVE_INFINITY
 
 let lastFired = NEVER
-const lastByPattern = new Map<HapticPattern, number>()
+const lastByKey = new Map<string, number>()
+
+export type HapticBackend = 'vibration' | 'switch' | 'none'
 
 /**
- * Whether this device can vibrate at all.
- *
- * Read at call time rather than cached, because a test — and a browser
- * extension — can install the API after this module loads.
+ * Which backend this device offers, at call time rather than cached — a test,
+ * and a browser extension, can install the API after this module loads.
  */
+export function hapticBackend(): HapticBackend {
+  if (typeof navigator !== 'undefined') {
+    if (typeof (navigator as Navigator & { vibrate?: unknown }).vibrate === 'function') {
+      return 'vibration'
+    }
+  }
+  if (switchTapSupported()) return 'switch'
+  return 'none'
+}
+
+/** Whether this device can produce any tactile output at all. */
 export function hapticsSupported(): boolean {
-  return (
-    typeof navigator !== 'undefined' &&
-    typeof (navigator as Navigator & { vibrate?: unknown }).vibrate === 'function'
-  )
+  return hapticBackend() !== 'none'
+}
+
+/**
+ * Whether the iOS switch haptic is available.
+ *
+ * Feature-detected on the element rather than sniffed from the user agent: the
+ * `switch` property exists on `HTMLInputElement` exactly where the rendering
+ * engine supports the switch appearance, which is the same place the system
+ * haptic comes with it.
+ */
+function switchTapSupported(): boolean {
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function') return false
+  try {
+    return 'switch' in document.createElement('input')
+  } catch {
+    return false
+  }
+}
+
+/** The hidden control, created once on first use and reused forever after. */
+let switchNode: HTMLInputElement | null = null
+
+function getSwitchNode(): HTMLInputElement | null {
+  if (switchNode?.isConnected) return switchNode
+  if (typeof document === 'undefined' || !document.body) return null
+
+  const input = document.createElement('input')
+  input.type = 'checkbox'
+  input.setAttribute('switch', '')
+  input.tabIndex = -1
+  input.setAttribute('aria-hidden', 'true')
+  // Present to the engine, absent to the player and to assistive tech. Not
+  // `display:none` or `hidden`: an unrendered control produces no haptic.
+  input.style.cssText =
+    'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;'
+  document.body.append(input)
+  switchNode = input
+  return input
+}
+
+/**
+ * One system tap on iOS. Returns whether the platform was asked.
+ *
+ * Only works inside a user gesture — Safari will not haptically respond to a
+ * toggle the user did not cause. A reveal that lands on mount therefore feels
+ * nothing here, which is correct: the alternative is a phone that taps you
+ * while you are reading.
+ */
+function switchTap(count: number): boolean {
+  const node = getSwitchNode()
+  if (!node) return false
+
+  try {
+    node.click()
+    if (count > 1) {
+      // One echo, far enough behind to be felt as a second tap rather than as a
+      // longer one. Never more: this backend has no shape to give.
+      setTimeout(() => {
+        if (switchNode?.isConnected) switchNode.click()
+      }, 90)
+    }
+    return true
+  } catch {
+    return false
+  }
 }
 
 export type VibrateOptions = {
   /**
-   * Minimum gap before this specific pattern may repeat, ms. For patterns tied
-   * to something a player can produce continuously — a scroll notch, a torch
+   * Minimum gap before this specific key may repeat, ms. For patterns tied to
+   * something a player can produce continuously — a scroll notch, a torch
    * moving — where the global floor alone is not enough.
    */
   throttleMs?: number
+  /**
+   * What the throttle counts. Defaults to the pattern name, but a caller with
+   * several moments sharing one pattern passes the *moment* — otherwise the
+   * torch sweeping across the hero (a `brush` every 1.6 s) also silences the
+   * next option hover, which is a different event that happens to feel similar.
+   */
+  throttleKey?: string
+  /**
+   * Land the pulse this many ms from now, to sit with its own beat in a phrased
+   * reveal. See `PHRASE` in the audio tokens.
+   *
+   * Before 8.11 haptics were never deferred, on the reasoning that a late pulse
+   * describes something that already happened. True for one moment — and wrong
+   * for a screen where five of them mount in the same frame: the outcome, the
+   * wager result, mastery and XP all fired inside a single tick, the floor kept
+   * the first and dropped the rest, and four of the five best haptic moments in
+   * the product never reached anyone's hand. Delayed to match the beat they
+   * belong to, all five are felt, in order.
+   */
+  delayMs?: number
 }
 
 /**
- * Fire a pattern. Returns whether the device was actually asked to vibrate.
+ * Fire a pattern. Returns whether the device was actually asked to vibrate
+ * (or, for a delayed pulse, whether it is scheduled to be).
  *
  * Refuses, silently, when: the hardware cannot; the player turned haptics off;
  * the player muted everything; reduced motion is set; or a pulse fired too
@@ -66,7 +179,26 @@ export type VibrateOptions = {
  * decides whether it is currently appropriate.
  */
 export function vibrate(pattern: HapticPattern, options: VibrateOptions = {}): boolean {
-  if (!hapticsSupported()) return false
+  const delayMs = options.delayMs ?? 0
+
+  if (delayMs > 0) {
+    // Gates are evaluated when the pulse actually lands, not when it was
+    // requested: a mute or a preference change inside the phrase must win.
+    // Plain `setTimeout`, not `window.setTimeout`: this module is imported in
+    // non-browser contexts (the unit suite among them) and a phrase offset is
+    // not worth a reference error.
+    setTimeout(() => {
+      fire(pattern, options)
+    }, delayMs)
+    return true
+  }
+
+  return fire(pattern, options)
+}
+
+function fire(pattern: HapticPattern, options: VibrateOptions): boolean {
+  const backend = hapticBackend()
+  if (backend === 'none') return false
 
   const mix = getAudioMix()
   if (!isHapticsEnabled(mix)) return false
@@ -78,10 +210,14 @@ export function vibrate(pattern: HapticPattern, options: VibrateOptions = {}): b
   if (prefersReducedMotion()) return false
 
   const now = performance.now()
-  if (now - lastFired < MIN_GAP_MS) return false
 
+  // The floor stops repetition, so it only governs the patterns a player can
+  // repeat freely. A commitment is never dropped for being close to a hover.
+  if (!isDecisive(pattern) && now - lastFired < MIN_GAP_MS) return false
+
+  const key = options.throttleKey ?? pattern
   const throttle = options.throttleMs ?? 0
-  if (throttle > 0 && now - (lastByPattern.get(pattern) ?? NEVER) < throttle) return false
+  if (throttle > 0 && now - (lastByKey.get(key) ?? NEVER) < throttle) return false
 
   // Scaled at the point of use rather than stored scaled, so moving the
   // intensity slider is felt on the very next pulse with nothing to invalidate.
@@ -89,7 +225,13 @@ export function vibrate(pattern: HapticPattern, options: VibrateOptions = {}): b
   if (scaled === null) return false
 
   lastFired = now
-  lastByPattern.set(pattern, now)
+  lastByKey.set(key, now)
+
+  if (backend === 'switch') {
+    // No duration and no shape on this backend — one tap, or two for something
+    // the player committed to.
+    return switchTap(isDecisive(pattern) ? 2 : 1)
+  }
 
   try {
     navigator.vibrate(scaled)
@@ -104,5 +246,7 @@ export function vibrate(pattern: HapticPattern, options: VibrateOptions = {}): b
 /** Drop the throttle history. Test seam only — nothing in the app calls this. */
 export function resetHapticThrottles(): void {
   lastFired = NEVER
-  lastByPattern.clear()
+  lastByKey.clear()
+  switchNode?.remove()
+  switchNode = null
 }

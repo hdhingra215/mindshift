@@ -57,6 +57,21 @@ export const MOMENTS = {
   'choice.hover': { cue: 'graze', haptic: 'brush', throttleMs: 320 },
 
   /**
+   * A blind spot lighting up under the cursor, a tap or a keyboard focus.
+   *
+   * Hovering here is not traversal — the constellation is a section you *read
+   * with the pointer*, and each point naming itself is the only content it has.
+   * So unlike every other hover in the product this one is audible, at the
+   * quietest material in the catalogue.
+   *
+   * Throttled tighter than `choice.hover` because the twelve points sit close
+   * together and sweeping the field must not become a stream: at 220 ms a
+   * deliberate move from one point to another is marked and a cursor thrown
+   * across all twelve produces a handful of glints, not twelve.
+   */
+  'bias.spark': { cue: 'glint', haptic: 'glint', throttleMs: 220 },
+
+  /**
    * The torch crossing the hero line. The most frequent moment in the product,
    * so it is the quietest and the most heavily throttled: a sound that fires
    * every time a cursor moves is the definition of annoying, and the throttle
@@ -80,8 +95,24 @@ export const MOMENTS = {
   /** The answer goes in. The heaviest moment in the product. */
   'answer.commit': { cue: 'seat', haptic: 'commit' },
 
-  /** Insight goes on the line. Same weight — it is the same kind of act. */
-  'wager.commit': { cue: 'seat', haptic: 'commit' },
+  /**
+   * Insight goes on the line.
+   *
+   * The one moment heavier than committing an answer. Both are commitments, but
+   * this one has something at risk, and 8.11 gives it its own material and its
+   * own pattern rather than reusing the answer's: a player who cannot tell the
+   * two apart in the hand is being told the stake was free.
+   */
+  'wager.commit': { cue: 'stake', haptic: 'stake' },
+
+  /**
+   * Entering the product from the landing page.
+   *
+   * The one navigation in the product that is a *decision*, so the one that is
+   * allowed to sound and to be felt like one. Everything else about navigation
+   * stays silent (see `route.change`).
+   */
+  'cta.enter': { cue: 'enter', haptic: 'commit' },
 
   /* ── Reveal ─────────────────────────────────────────────────────────────── */
 
@@ -126,11 +157,31 @@ export const MOMENTS = {
   /* ── Movement ───────────────────────────────────────────────────────────── */
 
   /**
-   * Passing a stop on the loop rail. **Sound is deliberately absent**: a page
-   * that ticks while you scroll is unbearable, but a rail you can feel moving
-   * under your thumb is exactly what this moment is for.
+   * The loop rail reaching the next stop as the page is scrolled **down**.
+   *
+   * The rail is the one place on the page where the reader is *moving* something
+   * rather than reading it, so it is the one place scroll-linked feedback is
+   * earned. It fires on a **threshold crossing**, never per scroll event: three
+   * stops across a whole section, which is a handful of marks in a page-length
+   * scroll rather than anything resembling a stream.
+   *
+   * 8.11 gives the forward direction a sound — a reel being wound in, quiet and
+   * short — because the rail is visibly *advancing* and a page that ticks
+   * unbearably is a page that ticks *continuously*, which the throttle and the
+   * stop count make impossible. The 520 ms material throttle underneath is the
+   * backstop if a stop count ever grows.
    */
-  'rail.notch': { haptic: 'hairline', throttleMs: 260 },
+  'rail.advance': { cue: 'reel', haptic: 'hairline', throttleMs: 420 },
+
+  /**
+   * The same rail crossing back **up**.
+   *
+   * Haptic only, and the lightest pattern in the set. Re-reading a section is
+   * not progress, so it gets the detent and not the event: enough to feel that
+   * the rail is physical in both directions, not enough to reward scrubbing the
+   * page up and down.
+   */
+  'rail.return': { haptic: 'brush', throttleMs: 420 },
 
   /**
    * Arriving in a new room.
@@ -154,11 +205,19 @@ export const MOMENTS = {
  * hovering a control.
  *
  * ── Sound and touch are not the same channel ────────────────────────────────
- * Several moments here are felt but not heard (`rail.notch`, `route.change`),
+ * Several moments here are felt but not heard (`rail.return`, `route.change`),
  * and one is heard but barely felt (`choice.hover`). That is deliberate: a
  * pulse costs nothing in a quiet room and a sound costs nothing in a pocket, so
- * each channel is allowed to mark what it is good at. **Phase 8.10 changed only
- * the `haptic` column** — every `cue` is exactly as it was.
+ * each channel is allowed to mark what it is good at.
+ *
+ * ── What 8.11 changed, and what it did not ──────────────────────────────────
+ * **Changed:** every `haptic` was re-scaled to the hardware (see `patterns.ts`);
+ * `wager.commit` was given its own heavier material and pattern; four moments
+ * were added (`bias.spark`, `cta.enter`, `rail.advance`, `rail.return`).
+ *
+ * **Not changed:** the environment, the nine synthesised materials, and the cue
+ * on every moment that already had one. This was a polish pass on the *physical*
+ * channel plus four new marks — not a re-sound of the product.
  */
 
 export type MomentName = keyof typeof MOMENTS

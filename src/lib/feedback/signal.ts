@@ -49,9 +49,26 @@ export function signal(moment: MomentName, options: SignalOptions = {}): void {
   }
 
   if ('haptic' in spec && spec.haptic) {
-    // A delayed sound is part of a phrase; a delayed vibration is one that
-    // arrives after the thing it describes, so haptics are never deferred.
-    vibrate(spec.haptic, throttleMs === undefined ? {} : { throttleMs })
+    /*
+     * The pulse takes the same phrase offset as the sound.
+     *
+     * Until 8.11 haptics were never deferred, on the reasoning that a late
+     * pulse describes something already past. That is right for one moment and
+     * wrong for a reveal screen, where the outcome, the wager result, mastery
+     * and XP all mount inside one tick: the anti-buzz floor kept the first and
+     * dropped the other four, so most of the product's best haptic moments were
+     * never felt at all. Offset, each lands with its own beat.
+     *
+     * The throttle is keyed by *moment* rather than by pattern, so two moments
+     * that happen to share a pattern no longer suppress one another — the torch
+     * sweeping the hero (a `brush` every 1.6 s) used to silence the next option
+     * hover, which is a different event.
+     */
+    vibrate(spec.haptic, {
+      throttleKey: moment,
+      delayMs: options.delayMs,
+      ...(throttleMs === undefined ? {} : { throttleMs }),
+    })
   }
 }
 
@@ -96,6 +113,13 @@ export function useSignalOnMount(
  * one-way animation. The engine's own floor and the moment's throttle sit
  * underneath as a second and third guard.
  *
+ * Direction matters, and 8.11 makes the two directions different moments:
+ * scrolling down *advances* the rail (a reel winding in, plus a mark to feel),
+ * scrolling back up only re-arms it (a light detent, and no sound). Both are
+ * throttled at the moment level, and the engine's floor sits underneath — so
+ * scrubbing the page back and forth across a boundary cannot produce a stream
+ * however hard someone tries.
+ *
  * @param value  0–1 progress. Read from a scroll MotionValue by the caller.
  * @param stops  How many detents across the whole range.
  */
@@ -116,7 +140,8 @@ export function createScrubber(stops: number): (value: number) => void {
     }
 
     if (stop === lastStop) return
+    const advancing = stop > lastStop
     lastStop = stop
-    signal('rail.notch')
+    signal(advancing ? 'rail.advance' : 'rail.return')
   }
 }

@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase/client'
 import { toFriendlyAuthError } from '../lib/auth-errors'
-import { callbackUrl } from '../lib/redirects'
+import { callbackUrl, oauthCallbackUrl } from '../lib/redirects'
 import type { AuthResult, SignUpInput, SignUpResult } from '../types'
 
 /**
@@ -39,6 +39,26 @@ export async function signUp({
 
   // No session on return → the project requires email confirmation.
   return { error: null, needsVerification: data.session === null }
+}
+
+/**
+ * Start the Google OAuth round trip.
+ *
+ * Supabase owns the whole exchange: it redirects to Google, receives the code
+ * at its own callback, and hands the browser back to `oauthCallbackUrl` with a
+ * session the client picks up via `detectSessionInUrl` — which fires
+ * `SIGNED_IN` in the AuthProvider, so profile bootstrap and route guards run
+ * exactly as they do after a password login. No token handling here.
+ *
+ * Resolves only if the redirect could not be started; on success the browser
+ * has already navigated away.
+ */
+export async function signInWithGoogle(intendedPath?: string): Promise<AuthResult> {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: oauthCallbackUrl(intendedPath) },
+  })
+  return { error: error ? toFriendlyAuthError(error) : null }
 }
 
 export async function signOut(): Promise<void> {
