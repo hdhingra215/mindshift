@@ -54,10 +54,17 @@ export function toFriendlyAuthError(error: unknown): string {
  * Translate the `error` / `error_code` a provider hands back on the callback
  * URL into the same calm voice. A cancelled consent screen is not a failure —
  * it says so, and leaves the email form untouched and ready.
+ *
+ * Deliberately provider-neutral: the callback URL carries the error code and the
+ * `?redirect=` intent, but not which provider produced it. Naming one would be a
+ * guess, and a wrong guess ("that Google sign-in") reads worse than no name at
+ * all. The local start-failure path in the buttons component does know its
+ * provider, but it surfaces `toFriendlyAuthError` instead — this function only
+ * ever sees the round trip.
  */
 export function toFriendlyOAuthError(code: string): string {
   if (/access_denied|cancel/i.test(code)) {
-    return 'No problem — that Google sign-in was cancelled. Try again, or use your email below.'
+    return 'No problem — that sign-in was cancelled. Try again, or use your email below.'
   }
-  return 'That Google sign-in didn’t complete. Try again, or use your email below.'
+  return 'That sign-in didn’t complete. Try again, or use your email below.'
 }

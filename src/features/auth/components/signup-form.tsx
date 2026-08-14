@@ -72,7 +72,6 @@ export function SignupForm() {
           id="displayName"
           type="text"
           autoComplete="nickname"
-          autoFocus
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
           aria-invalid={Boolean(fieldErrors.displayName)}
@@ -113,8 +112,12 @@ export function SignupForm() {
         />
       </FormField>
 
-      <SubmitButton pending={pending} pendingLabel="Creating your account…">
-        Start training
+      <SubmitButton
+        pending={pending}
+        pendingLabel="Creating your account…"
+        variant="outline"
+      >
+        Create account with email
       </SubmitButton>
     </form>
   )

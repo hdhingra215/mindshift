@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   AuthShell,
-  ContinueWithGoogle,
   LoginForm,
+  OAuthProviderButtons,
   redirectIfAuthenticated,
   toFriendlyOAuthError,
 } from '@/features/auth'
@@ -32,11 +32,11 @@ function LoginPage() {
         </>
       }
     >
-      <LoginForm redirectTo={redirect} />
-      <ContinueWithGoogle
+      <OAuthProviderButtons
         redirectTo={redirect}
         callbackError={error ? toFriendlyOAuthError(error) : undefined}
       />
+      <LoginForm redirectTo={redirect} />
     </AuthShell>
   )
 }

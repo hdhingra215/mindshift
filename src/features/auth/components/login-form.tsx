@@ -60,7 +60,6 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
           id="email"
           type="email"
           autoComplete="email"
-          autoFocus
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           aria-invalid={Boolean(fieldErrors.email)}
@@ -90,8 +89,8 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
         </Link>
       </div>
 
-      <SubmitButton pending={pending} pendingLabel="Signing you in…">
-        Continue
+      <SubmitButton pending={pending} pendingLabel="Signing you in…" variant="outline">
+        Continue with email
       </SubmitButton>
     </form>
   )

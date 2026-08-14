@@ -1,4 +1,5 @@
 import type { Session, User } from '@supabase/supabase-js'
+import type { OAuthProvider } from './lib/oauth-providers'
 
 /**
  * Auth lifecycle status.
@@ -29,8 +30,11 @@ export type AuthContextValue = {
   user: User | null
   session: Session | null
   signIn: (email: string, password: string) => Promise<AuthResult>
-  /** Redirects to Google; resolves with an error only if the redirect failed. */
-  signInWithGoogle: (intendedPath?: string) => Promise<AuthResult>
+  /** Redirects to the provider; resolves with an error only if the redirect failed. */
+  signInWithOAuth: (
+    provider: OAuthProvider,
+    intendedPath?: string,
+  ) => Promise<AuthResult>
   signUp: (input: SignUpInput) => Promise<SignUpResult>
   signOut: () => Promise<void>
   requestPasswordReset: (email: string) => Promise<AuthResult>

@@ -17,10 +17,17 @@ import { supabase } from '@/lib/supabase/client'
 
 /**
  * `display_name` is what email signup writes; `full_name` / `name` are what
- * Google puts in the identity metadata. Preferring those over the email local
- * part means an OAuth player lands on a real name, not "a.dhingra".
+ * Google and GitHub put in the identity metadata. `user_name` is GitHub's
+ * handle — last, because it is a login not a name, but still a better greeting
+ * than the email local part for a player who never set a full name.
+ * Preferring these means an OAuth player lands on a real name, not "a.dhingra".
  */
-const NAME_METADATA_KEYS = ['display_name', 'full_name', 'name'] as const
+const NAME_METADATA_KEYS = [
+  'display_name',
+  'full_name',
+  'name',
+  'user_name',
+] as const
 
 function deriveDisplayName(user: User): string {
   for (const key of NAME_METADATA_KEYS) {

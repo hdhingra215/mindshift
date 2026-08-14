@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   AuthShell,
-  ContinueWithGoogle,
+  OAuthProviderButtons,
   SignupForm,
   redirectIfAuthenticated,
 } from '@/features/auth'
@@ -23,8 +23,8 @@ function SignupPage() {
         </>
       }
     >
+      <OAuthProviderButtons />
       <SignupForm />
-      <ContinueWithGoogle />
     </AuthShell>
   )
 }
