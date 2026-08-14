@@ -504,8 +504,19 @@ describe.skipIf(!live.available)('conviction precedes the answer (live database)
     // own verdict, exactly as Phase 8.5 settled it.
     expect(wager.was_correct).toBe(true)
     expect(Number(wager.delta)).toBe(Math.min(...rules.tiers))
+
+    /*
+     * `balance_after` is a full re-derivation, not `balance_before + delta`.
+     *
+     * `balance_before` is snapshotted by `place_wager` before any attempt row
+     * exists; `balance_after` calls `insight_balance()` once the attempt does, and
+     * that sums `starting + recognition × (correct decisions) + Σ delta`. So a
+     * correct answer moves the reserve by the stake *and* by the recognition
+     * award, which is earned whether or not anything was staked. A miss moves it
+     * by the stake alone — no recognition for a wrong call.
+     */
     expect(Number(wager.balance_after)).toBe(
-      Number(wager.balance_before) + Math.min(...rules.tiers),
+      Number(wager.balance_before) + Math.min(...rules.tiers) + rules.recognitionAward,
     )
   }, 90_000)
 

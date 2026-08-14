@@ -32,6 +32,39 @@ if (!live.available) {
   console.warn(`[harness] reveal suite skipped — ${live.reason}`)
 }
 
+/**
+ * Lock the smallest defined stake on a scenario, as playing now requires.
+ *
+ * Since Phase 9.2 a player who can afford a tier must have a wager on the table
+ * before `submit_attempt` will record their decision. The tests below go around
+ * the helper in `live-player.ts` on purpose — their subject is the RPC's own
+ * payload, which the helper does not return — so they carry the stake themselves.
+ *
+ * It is setup, not subject: reading the tier from `insight_wager_tiers()` keeps
+ * the amount the economy's to define, and the smallest one is used so a lost
+ * stake leaves the reserve able to fund the next test in the block.
+ */
+async function stakeSmallest(
+  player: LivePlayer,
+  sessionId: string,
+  scenarioId: string,
+): Promise<void> {
+  const tiers = ((await player.client.rpc('insight_wager_tiers')).data as number[]).map(Number)
+
+  const { data } = await player.client.rpc('place_wager', {
+    p_session_id: sessionId,
+    p_scenario_id: scenarioId,
+    p_stake: Math.min(...tiers),
+  })
+
+  // Loud on failure: a silently unstaked scenario would surface later as the
+  // ordering gate refusing the answer, which reads like a gate defect.
+  const accepted = (data as { accepted?: boolean; reason?: string } | null) ?? {}
+  if (accepted.accepted !== true && accepted.reason !== 'already_locked') {
+    throw new Error(`could not stake scenario ${scenarioId}: ${accepted.reason ?? 'unknown'}`)
+  }
+}
+
 describe.skipIf(!live.available)('correctness is not exposed before answering (live database)', () => {
   let player: LivePlayer
   let sessionId: string
@@ -188,6 +221,10 @@ describe.skipIf(!live.available)('the server decides correctness (live database)
 
   it('derives the outcome from the choice, so a wrong answer stays wrong', async () => {
     const scenario = await loadScenarioForPlay(player, 'easy')
+    // This player holds the full starting reserve, so the ordering gate requires
+    // a stake before it will record a decision. The subject is unchanged: the
+    // client still names only a choice.
+    await stakeSmallest(player, sessionId, scenario.id)
 
     const { data, error } = await player.client.rpc('submit_attempt', {
       p_session_id: sessionId,
@@ -215,6 +252,9 @@ describe.skipIf(!live.available)('the server decides correctness (live database)
 
   it('pays a miss like a miss, however the submission was shaped', async () => {
     const scenario = await loadScenarioForPlay(player, 'medium')
+    // Required to reach the answer at all. XP is not the wagered quantity, so
+    // staking cannot move the reward this test measures.
+    await stakeSmallest(player, sessionId, scenario.id)
 
     const submitted = await player.client.rpc('submit_attempt', {
       p_session_id: sessionId,
@@ -270,14 +310,24 @@ describe.skipIf(!live.available)('the server decides correctness (live database)
   it('records one decision per scenario however often it is submitted', async () => {
     const scenario = await loadScenarioForPlay(player, 'expert')
 
+    // Staked once, for the *new* attempt only.
+    await stakeSmallest(player, sessionId, scenario.id)
+
     const first = await player.client.rpc('submit_attempt', {
       p_session_id: sessionId,
       p_scenario_id: scenario.id,
       p_choice_id: scenario.correct.choiceId,
       p_response_time_ms: 3_000,
     })
-    // Resubmitting with the *other* choice must not overwrite the decision:
-    // attempts are immutable, so the first answer stands.
+    /*
+     * Resubmitting with the *other* choice must not overwrite the decision:
+     * attempts are immutable, so the first answer stands.
+     *
+     * No second stake, deliberately. This is also the assertion that the Phase
+     * 9.2 gate sits *behind* the existing-attempt lookup: the replay finds the
+     * recorded decision and returns it without ever reaching the wager check —
+     * which is what keeps attempts recorded before the gate existed replayable.
+     */
     const second = await player.client.rpc('submit_attempt', {
       p_session_id: sessionId,
       p_scenario_id: scenario.id,
