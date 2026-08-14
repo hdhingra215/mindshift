@@ -24,32 +24,87 @@ const walletSchema = z
   .object({
     balance: z.coerce.number().int(),
     tiers: z.array(z.coerce.number().int()),
+    // Absent on a deployment predating the affordable list; fall back to the
+    // client filter there rather than reporting "nothing affordable", which
+    // would wrongly send an affordable player straight past the wager.
+    affordable: z.array(z.coerce.number().int()).nullish(),
     recognition_award: z.coerce.number().int(),
   })
   .transform(
     (row): InsightWallet => ({
       balance: row.balance,
       tiers: row.tiers,
+      affordable:
+        row.affordable ?? row.tiers.filter((tier) => tier > 0 && tier <= row.balance),
       recognitionAward: row.recognition_award,
     }),
   )
 
-/** The reserve, or null when the economy cannot be read. */
-export async function fetchInsightWallet(): Promise<InsightWallet | null> {
-  const { data, error } = await supabase.rpc('insight_wallet')
+/**
+ * How a reserve read finished.
+ *
+ * The three are kept apart because the gate treats them differently now that a
+ * stake can be compulsory. `absent` means this deployment has no economy at all,
+ * so `submit_attempt` has no ordering gate either and the player may answer
+ * freely. `failed` means we simply do not know — and answering on a guess would
+ * produce a submission the server refuses.
+ */
+export type WalletRead =
+  | { status: 'ok'; wallet: InsightWallet }
+  | { status: 'absent' }
+  | { status: 'failed' }
 
-  if (error) {
-    console.error(`[wager:${error.code}] wallet read failed — ${error.message}`)
-    return null
+/** PostgREST / PostgreSQL codes that mean "this function is not deployed". */
+const ABSENT_CODES = new Set(['42883', 'PGRST202', 'PGRST203'])
+
+/** How many times the reserve is read before the gate gives up and offers retry. */
+const WALLET_READ_ATTEMPTS = 3
+
+/** Backoff between reads. Short — a scenario is on screen waiting on this. */
+const WALLET_RETRY_DELAY_MS = 250
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Read the Insight reserve, with a bounded retry.
+ *
+ * The retry exists because this read became load-bearing: it decides whether a
+ * stake is compulsory, so "we could not read it" may not quietly collapse into
+ * "you have nothing". A malformed payload is not retried — it will not fix
+ * itself — and a missing function reports `absent` on the first look.
+ */
+export async function fetchInsightWallet(): Promise<WalletRead> {
+  for (let attempt = 1; attempt <= WALLET_READ_ATTEMPTS; attempt += 1) {
+    const { data, error } = await supabase.rpc('insight_wallet')
+
+    if (error) {
+      if (ABSENT_CODES.has(error.code ?? '')) {
+        console.error(`[wager:${error.code}] economy not deployed — ${error.message}`)
+        return { status: 'absent' }
+      }
+      console.error(
+        `[wager:${error.code}] wallet read failed (attempt ${attempt}/${WALLET_READ_ATTEMPTS}) — ${error.message}`,
+      )
+      if (attempt < WALLET_READ_ATTEMPTS) {
+        await wait(WALLET_RETRY_DELAY_MS * attempt)
+        continue
+      }
+      return { status: 'failed' }
+    }
+
+    const parsed = walletSchema.safeParse(data)
+    if (!parsed.success) {
+      // Not retried: a shape that is wrong once is wrong every time.
+      console.error('[wager:malformed] wallet payload —', parsed.error.issues)
+      return { status: 'failed' }
+    }
+
+    return { status: 'ok', wallet: parsed.data }
   }
 
-  const parsed = walletSchema.safeParse(data)
-  if (!parsed.success) {
-    console.error('[wager:malformed] wallet payload —', parsed.error.issues)
-    return null
-  }
-
-  return parsed.data
+  return { status: 'failed' }
 }
 
 const acceptedSchema = z.object({

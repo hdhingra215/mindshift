@@ -382,3 +382,98 @@ describe.skipIf(!live.available)('wagers stay blind (live database)', () => {
     expect(Number(wager.balance_after)).toBe(0)
   }, 90_000)
 })
+
+describe.skipIf(!live.available)('the ordering gate reveals nothing (live database)', () => {
+  /**
+   * The two properties have to hold together.
+   *
+   * Phase 8.6 made correctness unreadable until a decision is recorded. Phase 9.2
+   * put a wager in front of that decision. So there is now a window where the
+   * player has answered *nothing* and can read *nothing* — and the refusal that
+   * enforces the ordering must not become a new way to learn the answer, or the
+   * gate would undo the blindness the wager depends on.
+   *
+   * Its own player, so the reserve is untouched and the branch below is decided
+   * by the deployment rather than by whatever an earlier test spent.
+   */
+  let player: LivePlayer
+  let sessionId: string
+
+  beforeAll(async () => {
+    if (!live.available) return
+    player = await createLivePlayer(live.env, 'reveal-ordering')
+    sessionId = await openSession(player.client, player.id)
+  }, 60_000)
+
+  afterAll(async () => {
+    await player?.dispose()
+  }, 30_000)
+
+  it('holds the order while the reveal is still withheld, and leaks nothing either way', async () => {
+    const scenario = await loadScenarioForPlay(player, 'medium')
+    const choiceIds = [scenario.correct.choiceId, scenario.trap.choiceId]
+
+    const readOutcomes = async () =>
+      (await player.client.from('outcomes').select('id, is_correct').in('choice_id', choiceIds))
+        .data
+
+    // Nothing decided, so nothing readable. The reveal genuinely has not arrived.
+    expect(await readOutcomes()).toEqual([])
+
+    // An answer with no stake behind it.
+    const bare = await player.client.rpc('submit_attempt', {
+      p_session_id: sessionId,
+      p_scenario_id: scenario.id,
+      p_choice_id: scenario.correct.choiceId,
+      p_response_time_ms: 4_000,
+    })
+
+    if (bare.error) {
+      // ── Gate deployed ──────────────────────────────────────────────────────
+      expect(bare.error.message).toMatch(/wager is required/i)
+
+      // The refusal names the scenario and nothing about the answer.
+      expect(bare.error.message).not.toMatch(/correct|trap|outcome|explanation/i)
+
+      // Refused means unrecorded, and the outcomes are still sealed.
+      expect(await readOutcomes()).toEqual([])
+      const { data: attempts } = await player.client
+        .from('attempts')
+        .select('id')
+        .eq('player_id', player.id)
+        .eq('scenario_id', scenario.id)
+      expect(attempts ?? []).toHaveLength(0)
+
+      // Stake first, and the same answer now lands — reveal included, one call.
+      const tiers = ((await player.client.rpc('insight_wager_tiers')).data as number[]).map(Number)
+      const placed = await player.client.rpc('place_wager', {
+        p_session_id: sessionId,
+        p_scenario_id: scenario.id,
+        p_stake: Math.min(...tiers),
+      })
+      expect((placed.data as Record<string, unknown>).accepted).toBe(true)
+
+      // Still blind at the moment of staking — the whole point of the mechanic.
+      expect(await readOutcomes()).toEqual([])
+
+      const staked = await player.client.rpc('submit_attempt', {
+        p_session_id: sessionId,
+        p_scenario_id: scenario.id,
+        p_choice_id: scenario.correct.choiceId,
+        p_response_time_ms: 4_000,
+      })
+      expect(staked.error).toBeNull()
+      const outcome = (staked.data as Record<string, unknown>).outcome as Record<string, unknown>
+      expect(typeof outcome.is_correct).toBe('boolean')
+      expect(outcome.explanation).toBeTruthy()
+    } else {
+      // ── Gate absent ────────────────────────────────────────────────────────
+      // The migration ships with the client that stakes first, so this project
+      // may legitimately not have it yet. The 8.6 contract still has to hold.
+      console.warn('[harness] ordering gate not deployed — asserting the 8.6 contract only')
+      const outcome = (bare.data as Record<string, unknown>).outcome as Record<string, unknown>
+      expect(typeof outcome.is_correct).toBe('boolean')
+      expect(outcome.explanation).toBeTruthy()
+    }
+  }, 150_000)
+})

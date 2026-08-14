@@ -13,6 +13,13 @@ type ScenarioPlayProps = {
   selectedChoiceId: string | null
   submitting: boolean
   completedCount: number
+  /**
+   * Whether the wager step has settled and the choices may be touched. False
+   * while a stake is required and unlocked, and while the reserve is unread.
+   * The reducer rejects a selection in that state regardless of this flag —
+   * this only spares the player from discovering it by clicking.
+   */
+  answersEnabled: boolean
   /** XP banked this session so far, as recorded by the server. */
   sessionXp: number
   onSelect: (choiceId: string) => void
@@ -23,16 +30,22 @@ type ScenarioPlayProps = {
  * The decision screen: session/pack meta, the focal scenario card, and the
  * choices as an accessible radio group. Selection is a deliberate two-step
  * (pick → commit) so a decision feels consequential and can't be double-fired.
+ *
+ * The scenario itself is always readable. Only the *choices* wait on the wager —
+ * a player must be able to weigh the situation before deciding what to stake on
+ * their read of it, otherwise the stake would be blind in the wrong way.
  */
 export function ScenarioPlay({
   scenario,
   selectedChoiceId,
   submitting,
   completedCount,
+  answersEnabled,
   sessionXp,
   onSelect,
   onSubmit,
 }: ScenarioPlayProps) {
+  const locked = !answersEnabled
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <div className="flex flex-wrap items-center gap-2">
@@ -75,13 +88,24 @@ export function ScenarioPlay({
 
       <div className="flex flex-col gap-3">
         <p className="text-sm font-medium text-foreground">What do you do?</p>
+        {/*
+         * Says why the choices are shut, next to the choices themselves — a
+         * disabled control with no explanation reads as a broken one. Polite live
+         * region so the change is announced without interrupting a reader
+         * mid-scenario.
+         */}
+        {locked ? (
+          <p aria-live="polite" className="text-xs text-muted-foreground">
+            Your options unlock once you’ve backed your confidence above.
+          </p>
+        ) : null}
         <RadioGroupPrimitive.Root
           value={selectedChoiceId ?? undefined}
           onValueChange={(choiceId) => {
             signal('choice.select')
             onSelect(choiceId)
           }}
-          disabled={submitting}
+          disabled={submitting || locked}
           aria-label="Choose your response"
           className="grid gap-3"
         >
@@ -127,7 +151,7 @@ export function ScenarioPlay({
         <Button
           size="lg"
           className="w-full sm:w-auto"
-          disabled={!selectedChoiceId || submitting}
+          disabled={locked || !selectedChoiceId || submitting}
           aria-busy={submitting}
           onClick={onSubmit}
           // The one commitment in the loop: a mechanism seating, in the hand.

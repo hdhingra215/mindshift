@@ -31,9 +31,11 @@ export function GameScreen() {
 
   const {
     state,
+    answersEnabled,
     select,
     selectStake,
     lockWager,
+    retryWallet,
     submit,
     saveReflection,
     next,
@@ -98,7 +100,23 @@ export function GameScreen() {
               <TwinPredictionCard prediction={state.twinPrediction} />
             </div>
           ) : null}
+          {/*
+           * The first decision, above the second. Conviction is committed before
+           * the answer exists — so the panel leads, and the choices stay shut
+           * until it settles. `answersEnabled` is the only thing that opens them,
+           * and the reducer enforces the same rule independently.
+           */}
+          <div className="mb-6">
+            <WagerPanel
+              onLock={() => void lockWager()}
+              onRetryRead={retryWallet}
+              onSelectStake={selectStake}
+              phase={state.wager}
+              selectedStake={state.selectedStake}
+            />
+          </div>
           <ScenarioPlay
+            answersEnabled={answersEnabled}
             scenario={state.scenario}
             selectedChoiceId={state.selectedChoiceId}
             submitting={state.phase === 'submitting'}
@@ -107,20 +125,6 @@ export function GameScreen() {
             onSubmit={() => void submit()}
             sessionXp={state.sessionXp}
           />
-          {/*
-           * The second decision, under the first. Answer, then decide how much
-           * you trust it — the order matters, so the panel only enables once a
-           * choice is selected.
-           */}
-          <div className="mt-6">
-            <WagerPanel
-              enabled={state.selectedChoiceId !== null}
-              onLock={() => void lockWager()}
-              onSelectStake={selectStake}
-              phase={state.wager}
-              selectedStake={state.selectedStake}
-            />
-          </div>
           {achievementToast}
         </>
       )

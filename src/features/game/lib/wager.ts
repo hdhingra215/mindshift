@@ -1,4 +1,4 @@
-import type { InsightWallet, WagerOutcome } from '../types'
+import type { GamePhase, InsightWallet, WagerOutcome, WagerPhase } from '../types'
 
 /**
  * Blind Wager rules, on the client side of the line.
@@ -26,11 +26,14 @@ export function formatInsight(amount: number): string {
 /**
  * The stakes this player can actually back right now.
  *
- * Filtered against the live balance rather than shown greyed-out: an option you
- * cannot take is noise, and a wager panel is meant to be read in a second.
+ * Read straight from the server's `affordable` list rather than re-filtered
+ * here. Two implementations of "what can I stake" is one too many now that the
+ * answer decides whether a wager is compulsory — see `InsightWallet.affordable`.
+ * Sorted defensively; an option you cannot take is never shown greyed-out,
+ * because a wager panel is meant to be read in a second.
  */
 export function affordableTiers(wallet: InsightWallet): number[] {
-  return wallet.tiers.filter((tier) => tier > 0 && tier <= wallet.balance).sort((a, b) => a - b)
+  return [...wallet.affordable].filter((tier) => tier > 0).sort((a, b) => a - b)
 }
 
 /** True when the player can back themselves at all. False is a legitimate state. */
@@ -39,15 +42,70 @@ export function canWager(wallet: InsightWallet): boolean {
 }
 
 /**
+ * Must this player stake before they may answer?
+ *
+ * The rule in one place: a wager is compulsory exactly when the reserve can
+ * cover a stake. Below the smallest tier — which includes an empty reserve and
+ * the 1-to-9 band above it — the player answers directly and is never stuck,
+ * because being poor at Insight may not stop someone playing the game.
+ *
+ * `submit_attempt` decides this again server-side from the same numbers. This is
+ * the advisory half, so the interface can open the answers at the right moment.
+ */
+export function isWagerRequired(wallet: InsightWallet): boolean {
+  return canWager(wallet)
+}
+
+/**
+ * Has the wager step finished, whichever way it finished?
+ *
+ * **The single source of truth for whether the answers may be touched.** Locked
+ * (staked), skipped (could not afford one) and unavailable (no economy on this
+ * deployment) are the three settled outcomes; `pending`, `offered` and `locking`
+ * are all still in flight and must hold the decision shut.
+ */
+export function wagerSettled(phase: WagerPhase): boolean {
+  return phase.status === 'locked' || phase.status === 'skipped' || phase.status === 'unavailable'
+}
+
+/**
+ * May the player select or commit an answer right now?
+ *
+ * Exported and pure so the reducer, the interface and the tests all read one
+ * rule. The reducer calls this to *reject the action*, which is what makes the
+ * ordering structural — a disabled button is a courtesy, not an enforcement.
+ */
+export function canAnswer(gamePhase: GamePhase, wager: WagerPhase): boolean {
+  return gamePhase === 'deciding' && wagerSettled(wager)
+}
+
+/**
+ * Should the answer clock be restarted on this transition?
+ *
+ * `response_time_ms` claims to measure how long the player weighed their
+ * *choice*, and it feeds the session rollup and the Archive's median
+ * deliberation reading. With the stake now in front of the answer, timing from
+ * the scenario load would bill every second spent choosing a stake to the
+ * answer and quietly inflate that number.
+ *
+ * So the clock restarts on the edge into the answer step — settled having been
+ * unsettled — and only there. Not on every render while settled, or the elapsed
+ * time would reset to nothing on the way to the submit.
+ */
+export function shouldRestartAnswerClock(wasSettled: boolean, isSettled: boolean): boolean {
+  return isSettled && !wasSettled
+}
+
+/**
  * Is this a stake the server would accept?
  *
- * Mirrors `place_wager`'s validation exactly. The client checks first only so a
- * rejected stake never reaches the network; the server is still the authority.
+ * Mirrors `place_wager`'s validation, against the server's own affordable list.
+ * The client checks first only so a rejected stake never reaches the network;
+ * the server is still the authority.
  */
 export function isValidStake(wallet: InsightWallet, stake: number): boolean {
   if (!Number.isInteger(stake) || stake <= 0) return false
-  if (!wallet.tiers.includes(stake)) return false
-  return stake <= wallet.balance
+  return affordableTiers(wallet).includes(stake)
 }
 
 /**
@@ -118,7 +176,29 @@ export function describeWagerIntro(wallet: InsightWallet): string {
   return `Insight is earned by playing well and has no real-world value. Get it right and you gain your stake; get it wrong and you lose it. Each correct answer earns ${wallet.recognitionAward} Insight either way, so you can never be stuck.`
 }
 
-/** What the panel says when the player cannot afford any stake. */
+/**
+ * The line that states the wager is the way in.
+ *
+ * Says *why* rather than "required": the stake is how you commit to a read, and
+ * naming it that way keeps the step part of the decision instead of a toll on
+ * the way to one.
+ */
+export function describeWagerRequirement(): string {
+  return 'Commit your conviction first — your options unlock once your stake is locked in.'
+}
+
+/**
+ * What the panel says when the player cannot afford any stake.
+ *
+ * Covers an empty reserve and the band above it that still cannot cover the
+ * smallest tier. It has to say plainly that the game continues: a player who
+ * reads this must not think they are locked out.
+ */
 export function describeEmptyReserve(wallet: InsightWallet): string {
-  return `Your reserve is empty. Keep playing — every correct answer earns ${wallet.recognitionAward} Insight, and the wager comes back on its own.`
+  return `Not enough Insight to stake this one, so go straight to your answer. Keep playing — every correct answer earns ${wallet.recognitionAward} Insight, and the wager comes back on its own.`
+}
+
+/** What the panel says while the reserve has not come back yet. */
+export function describeReserveUnreadable(): string {
+  return 'We couldn’t read your Insight reserve just now. It decides what you can stake, so let’s try that again before you answer.'
 }

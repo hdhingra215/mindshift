@@ -10,6 +10,8 @@ import {
 } from '../api/game-service'
 import { awardAttemptXp, awardReflectionXp } from '../api/progression-service'
 import { fetchInsightWallet, placeWager } from '../api/wager-service'
+import { WAGER_REQUIRED_ERROR } from '../api/game-service'
+import { canAnswer, canWager, shouldRestartAnswerClock, wagerSettled } from '../lib/wager'
 import { requestTwinPrediction } from '@/features/profile'
 import type { TwinPrediction } from '@/features/profile'
 import type { AchievementUnlock } from '@/features/achievements'
@@ -78,6 +80,12 @@ type Action =
   | { type: 'EMPTY'; session: GameSession }
   | { type: 'TWIN_PREDICTED'; scenarioId: string; prediction: TwinPrediction }
   | { type: 'WALLET'; scenarioId: string; wallet: InsightWallet }
+  /** This deployment has no economy — the only case that may open the answers. */
+  | { type: 'WALLET_ABSENT'; scenarioId: string }
+  /** The reserve read failed after its retries; the player is offered another. */
+  | { type: 'WALLET_UNREADABLE'; scenarioId: string }
+  /** Back to square one for this scenario: a retry, or a refused submission. */
+  | { type: 'WAGER_RESET'; scenarioId: string }
   | { type: 'STAKE_SELECTED'; stake: number | null }
   | { type: 'WAGER_LOCKING' }
   | { type: 'WAGER_LOCKED'; wagerId: string; stake: number }
@@ -104,7 +112,7 @@ const initialState: State = {
   reflectionXp: null,
   sessionXp: 0,
   twinPrediction: null,
-  wager: { status: 'unavailable' },
+  wager: { status: 'pending', unreadable: false },
   selectedStake: null,
   pendingAchievements: [],
   sessionAchievements: [],
@@ -133,8 +141,10 @@ function reducer(state: State, action: Action): State {
         // shown over the next.
         twinPrediction: null,
         // Same for the wager. The reserve is re-read per scenario so the panel
-        // always shows a balance the server would actually honour.
-        wager: { status: 'unavailable' },
+        // always shows a balance the server would actually honour — and until it
+        // lands the answers stay shut, because an unread reserve might yet turn
+        // out to require a stake.
+        wager: { status: 'pending', unreadable: false },
         selectedStake: null,
         error: null,
       }
@@ -143,8 +153,29 @@ function reducer(state: State, action: Action): State {
     case 'WALLET':
       // Guarded on the scenario id, like the Twin: an async read that lands
       // after the player moved on must not reopen a wager on the next scenario.
-      return state.scenario?.id === action.scenarioId && state.wager.status === 'unavailable'
-        ? { ...state, wager: { status: 'offered', wallet: action.wallet } }
+      // Affordability decides the branch, and the server's own list decides
+      // affordability — so `offered` here means the server will require a stake.
+      return state.scenario?.id === action.scenarioId && state.wager.status === 'pending'
+        ? {
+            ...state,
+            wager: canWager(action.wallet)
+              ? { status: 'offered', wallet: action.wallet }
+              : { status: 'skipped', wallet: action.wallet },
+          }
+        : state
+    case 'WALLET_ABSENT':
+      return state.scenario?.id === action.scenarioId && state.wager.status === 'pending'
+        ? { ...state, wager: { status: 'unavailable' } }
+        : state
+    case 'WALLET_UNREADABLE':
+      // Stays `pending`, so the answers stay shut. Guessing "no balance" here
+      // would hand the player a submission the server is going to refuse.
+      return state.scenario?.id === action.scenarioId && state.wager.status === 'pending'
+        ? { ...state, wager: { status: 'pending', unreadable: true } }
+        : state
+    case 'WAGER_RESET':
+      return state.scenario?.id === action.scenarioId
+        ? { ...state, wager: { status: 'pending', unreadable: false }, selectedStake: null }
         : state
     case 'STAKE_SELECTED':
       return state.wager.status === 'offered'
@@ -182,11 +213,21 @@ function reducer(state: State, action: Action): State {
         ? { ...state, twinPrediction: action.prediction }
         : state
     case 'SELECT':
-      return state.phase === 'deciding'
+      /*
+       * The ordering, enforced where it cannot be bypassed. A disabled radio
+       * group is a courtesy; this is the rule. An answer selected before the
+       * wager settles is dropped on the floor — there is no path from an
+       * unsettled wager to a chosen answer.
+       */
+      return canAnswer(state.phase, state.wager)
         ? { ...state, selectedChoiceId: action.choiceId }
         : state
     case 'SUBMIT_START':
-      return { ...state, phase: 'submitting' }
+      // Same gate on the commitment itself, so a stale callback or a second
+      // caller cannot start a submission the wager step has not released.
+      return canAnswer(state.phase, state.wager) && state.selectedChoiceId !== null
+        ? { ...state, phase: 'submitting' }
+        : state
     case 'REVEALED':
       return {
         ...state,
@@ -249,6 +290,30 @@ export function useGameSession() {
    * reachable from exactly one of them — an exhausted library — so a defect can
    * never again be presented to the player as "nothing to play yet".
    */
+  /**
+   * Read the reserve for a scenario and settle the wager step from the result.
+   *
+   * Extracted so the retry offered on a failed read runs exactly the same path
+   * as the first attempt. The three outcomes are handled exhaustively: only
+   * `absent` may open the answers without a stake, because only there is the
+   * server's ordering gate absent too.
+   */
+  const readWallet = useCallback(async (scenarioId: string) => {
+    const read = await fetchInsightWallet()
+
+    switch (read.status) {
+      case 'ok':
+        dispatch({ type: 'WALLET', scenarioId, wallet: read.wallet })
+        return
+      case 'absent':
+        dispatch({ type: 'WALLET_ABSENT', scenarioId })
+        return
+      case 'failed':
+        dispatch({ type: 'WALLET_UNREADABLE', scenarioId })
+        return
+    }
+  }, [])
+
   const loadNext = useCallback(
     async (session: GameSession, playedIds: string[]) => {
       const load = await fetchNextScenario(playedIds)
@@ -272,15 +337,18 @@ export function useGameSession() {
           })
 
           /*
-           * The reserve is read per scenario and never awaited, for the same
-           * reason as the Twin: a scenario must be playable the instant it
-           * renders. A failed read leaves the wager `unavailable`, which is a
-           * designed state rather than an error — the player simply answers
-           * without staking.
+           * The reserve is read per scenario and still not awaited — the
+           * scenario should be readable the instant it renders, and reading is
+           * the first thing a player does here anyway.
+           *
+           * What changed with the ordering: the read now *gates* the answers
+           * rather than decorating them. So it retries, and a read that never
+           * succeeds leaves the step `pending` with a retry rather than
+           * pretending the reserve is empty. Silently skipping would build a
+           * submission `submit_attempt` refuses, and the player would have no
+           * way to see why.
            */
-          void fetchInsightWallet().then((wallet) => {
-            if (wallet) dispatch({ type: 'WALLET', scenarioId, wallet })
-          })
+          void readWallet(scenarioId)
           return
         }
         case 'exhausted':
@@ -291,7 +359,7 @@ export function useGameSession() {
           return
       }
     },
-    [],
+    [readWallet],
   )
 
   const init = useCallback(async () => {
@@ -321,9 +389,37 @@ export function useGameSession() {
     void init()
   }, [init])
 
+  /*
+   * The answer clock starts when the answers do.
+   *
+   * `response_time_ms` is meant to measure deliberation over the *decision*, and
+   * it feeds the session rollup and the Archive's median. With the wager in front
+   * of the answer, timing from the scenario load would bill every second spent
+   * choosing a stake to the answer — inflating the one number that claims to
+   * describe how long the player thought about their choice. So the clock is
+   * restarted at the transition into the answer step, whichever way the wager
+   * settled.
+   */
+  const answersOpen = wagerSettled(state.wager)
+  const answersOpenRef = useRef(false)
+  useEffect(() => {
+    if (shouldRestartAnswerClock(answersOpenRef.current, answersOpen)) {
+      shownAtRef.current = Date.now()
+    }
+    answersOpenRef.current = answersOpen
+  }, [answersOpen])
+
   const select = useCallback((choiceId: string) => {
     dispatch({ type: 'SELECT', choiceId })
   }, [])
+
+  /** Another go at the reserve, after a read that failed its own retries. */
+  const retryWallet = useCallback(() => {
+    const { scenario, wager } = stateRef.current
+    if (!scenario || wager.status !== 'pending') return
+    dispatch({ type: 'WAGER_RESET', scenarioId: scenario.id })
+    void readWallet(scenario.id)
+  }, [readWallet])
 
   const selectStake = useCallback((stake: number | null) => {
     dispatch({ type: 'STAKE_SELECTED', stake })
@@ -353,10 +449,11 @@ export function useGameSession() {
       return
     }
 
-    // Never blocks play: the stake is dropped, the panel reopens, and the
-    // player answers with or without one.
+    // The stake is dropped and the panel reopens. The copy no longer says
+    // "answer away": with the wager in front of the answer, a refused stake
+    // means trying again, not walking past it.
     dispatch({ type: 'WAGER_REJECTED' })
-    toast.error('That stake didn’t lock. Your Insight is untouched — answer away.')
+    toast.error('That stake didn’t lock. Your Insight is untouched — give it another go.')
   }, [])
 
   /** Advance the unlock queue — on timeout, dismissal, or Escape. */
@@ -365,9 +462,13 @@ export function useGameSession() {
   }, [])
 
   const submit = useCallback(async () => {
-    const { session, scenario, selectedChoiceId } = stateRef.current
+    const { session, scenario, selectedChoiceId, phase, wager } = stateRef.current
     const playerId = user?.id
     if (!session || !scenario || !selectedChoiceId || !playerId) return
+
+    // The same gate the reducer applies, checked before the network call so an
+    // unsettled wager never reaches `submit_attempt` at all.
+    if (!canAnswer(phase, wager)) return
 
     const choice = scenario.choices.find((c) => c.id === selectedChoiceId)
     if (!choice) return
@@ -385,6 +486,18 @@ export function useGameSession() {
     if (res.error || !res.data) {
       dispatch({ type: 'SUBMIT_REVERT' })
       toast.error(res.error ?? 'That didn’t save — give it another go.')
+
+      /*
+       * The server's gate refused: it read a reserve that can cover a stake while
+       * this client thought the step was settled — a reserve that moved in
+       * another tab, or a client that skipped on a stale read. Reopen the step
+       * and re-read, so the player lands back on the wager instead of retrying an
+       * answer that will be refused again.
+       */
+      if (res.error === WAGER_REQUIRED_ERROR) {
+        dispatch({ type: 'WAGER_RESET', scenarioId: scenario.id })
+        void readWallet(scenario.id)
+      }
       return
     }
 
@@ -396,7 +509,7 @@ export function useGameSession() {
     if (awarded.data) {
       dispatch({ type: 'AWARDED', award: awarded.data, kind: 'attempt' })
     }
-  }, [user?.id])
+  }, [user?.id, readWallet])
 
   const saveReflection = useCallback(
     async (input: ReflectionInput): Promise<{ error: string | null }> => {
@@ -449,9 +562,12 @@ export function useGameSession() {
 
   return {
     state,
+    /** The single gate the interface reads to know if the answers are live. */
+    answersEnabled: answersOpen,
     select,
     selectStake,
     lockWager,
+    retryWallet,
     submit,
     saveReflection,
     next,

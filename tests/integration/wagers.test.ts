@@ -4,6 +4,7 @@ import { summariseConviction } from '@/features/profile'
 import { probeLiveDatabase } from './support/live-env'
 import {
   createLivePlayer,
+  isWagerRequiredError,
   loadScenarioForPlay,
   openSession,
   recordAttempt,
@@ -94,10 +95,22 @@ describe.skipIf(!live.available)('Insight reserve (live database)', () => {
     const awarded = await player.client.rpc('award_attempt_xp', { p_attempt_id: attemptId })
 
     expect(awarded.error).toBeNull()
-    // No wager was placed, so nothing resolved — but the reserve still grew.
-    expect((awarded.data as Record<string, unknown>).wager).toBeNull()
-    expect(Number((awarded.data as Record<string, unknown>).insight_balance)).toBe(
-      rules.startingBalance + rules.recognitionAward,
+
+    /*
+     * The recognition award is independent of wagering, which is the claim here
+     * and the reason a drained player can always climb back.
+     *
+     * Written to hold on either side of the Phase 9.2 deployment: with the
+     * ordering gate live this player can afford a tier, so `recordAttempt` stakes
+     * the minimum and the reserve also moves by that stake. Without it, nothing
+     * resolved. Either way the recognition award landed.
+     */
+    const payload = awarded.data as Record<string, unknown>
+    const wager = payload.wager as Record<string, unknown> | null
+    const stakeDelta = wager === null ? 0 : Number(wager.delta)
+
+    expect(Number(payload.insight_balance)).toBe(
+      rules.startingBalance + rules.recognitionAward + stakeDelta,
     )
   }, 60_000)
 })
@@ -359,7 +372,15 @@ describe.skipIf(!live.available)('resolving a wager (live database)', () => {
     expect(summary.netInsight).toBe((data ?? []).reduce((sum, row) => sum + (row.delta ?? 0), 0))
   }, 60_000)
 
-  it('leaves the wager unresolved when the player never staked', async () => {
+  it('resolves an attempt that carries no wager without inventing one', async () => {
+    /*
+     * Phase 9.2 made a stake compulsory for a player who can afford one, so an
+     * unwagered attempt is now only reachable below the smallest tier. What this
+     * asserts is unchanged and still worth asserting: the award pipeline reports
+     * `wager: null` rather than fabricating a settlement, and XP lands normally.
+     * `recordAttempt` stakes only if the server demands it, so on a deployment
+     * without the gate this remains a genuinely unwagered attempt.
+     */
     const scenario = await loadScenarioForPlay(player, 'hard')
     const attemptId = await recordAttempt(player.client, {
       playerId: player.id,
@@ -370,11 +391,275 @@ describe.skipIf(!live.available)('resolving a wager (live database)', () => {
     })
 
     const awarded = await player.client.rpc('award_attempt_xp', { p_attempt_id: attemptId })
+    const payload = awarded.data as Record<string, unknown>
+    const wager = payload.wager as Record<string, unknown> | null
 
-    // Skipping is free and fully supported: the scenario resolves normally.
-    expect((awarded.data as Record<string, unknown>).wager).toBeNull()
-    expect(Number((awarded.data as Record<string, unknown>).awarded)).toBeGreaterThan(0)
+    expect(Number(payload.awarded)).toBeGreaterThan(0)
+
+    if (wager === null) {
+      // Unwagered: nothing settled, nothing invented.
+      expect(wager).toBeNull()
+    } else {
+      // The gate is live, so the helper staked the minimum. Even money either way.
+      expect(Math.abs(Number(wager.delta))).toBe(Number(wager.stake))
+    }
   }, 60_000)
+})
+
+describe.skipIf(!live.available)('conviction precedes the answer (live database)', () => {
+  /**
+   * The ordering gate in `submit_attempt` (Phase 9.2).
+   *
+   * ── Why this block probes before it asserts ─────────────────────────────────
+   * The migration has to deploy alongside the client that stakes first: an active
+   * gate under the previous client would refuse every affordable player's answer.
+   * So the gate may legitimately be absent from the project this suite is pointed
+   * at, and the block says so loudly rather than reporting a pass over a rule
+   * nothing is enforcing.
+   */
+  let player: LivePlayer
+  let sessionId: string
+
+  /**
+   * Decided by the first test rather than by a dedicated probe player.
+   *
+   * The probe *is* the first assertion — submit with an affordable reserve and no
+   * stake — so spending a second throwaway player and a second award pipeline run
+   * to learn the same fact is load this suite does not need against a live
+   * project. Null until that test has run.
+   */
+  let gateLive: boolean | null = null
+
+  beforeAll(async () => {
+    if (!live.available) return
+    player = await createLivePlayer(live.env, 'wager-ordering')
+    sessionId = await openSession(player.client, player.id)
+  }, 60_000)
+
+  afterAll(async () => {
+    await player?.dispose()
+  }, 30_000)
+
+  it('refuses a fresh answer from a player who can afford a stake', async (ctx) => {
+    const scenario = await loadScenarioForPlay(player, 'easy')
+
+    // Affordable reserve, no wager on the table.
+    const { error } = await player.client.rpc('submit_attempt', {
+      p_session_id: sessionId,
+      p_scenario_id: scenario.id,
+      p_choice_id: scenario.correct.choiceId,
+      p_response_time_ms: 4_000,
+    })
+
+    gateLive = isWagerRequiredError(error?.message)
+
+    if (!gateLive) {
+      console.warn(
+        '[harness] ordering gate not deployed — Phase 9.2 assertions skipped. ' +
+          'Apply 20260814000001_phase9_2_wager_before_answer.sql to enforce it.',
+      )
+      // Reported as skipped, never as a pass: a green tick over a rule nothing
+      // is enforcing is the single most misleading outcome this suite can produce.
+      ctx.skip()
+    }
+
+    expect(error).not.toBeNull()
+    expect(error?.message).toMatch(/wager is required/i)
+
+    // And nothing was recorded — a refused answer is not a half-played scenario.
+    const { data: attempts } = await player.client
+      .from('attempts')
+      .select('id')
+      .eq('player_id', player.id)
+      .eq('scenario_id', scenario.id)
+
+    expect(attempts ?? []).toHaveLength(0)
+  }, 90_000)
+
+  it('accepts the answer once the stake is locked, and settles it as before', async (ctx) => {
+    if (!gateLive) ctx.skip()
+    const rules = await economy(player)
+    const scenario = await loadScenarioForPlay(player, 'medium')
+
+    const placed = await player.client.rpc('place_wager', {
+      p_session_id: sessionId,
+      p_scenario_id: scenario.id,
+      p_stake: Math.min(...rules.tiers),
+    })
+    expect((placed.data as Record<string, unknown>).accepted).toBe(true)
+
+    const attemptId = await recordAttempt(player.client, {
+      playerId: player.id,
+      sessionId,
+      scenarioId: scenario.id,
+      choiceId: scenario.correct.choiceId,
+      outcomeId: scenario.correct.outcomeId,
+      skipWager: true,
+    })
+
+    const awarded = await player.client.rpc('award_attempt_xp', { p_attempt_id: attemptId })
+    const wager = (awarded.data as Record<string, unknown>).wager as Record<string, unknown>
+
+    // Resolution is untouched by the reordering: even money, from the server's
+    // own verdict, exactly as Phase 8.5 settled it.
+    expect(wager.was_correct).toBe(true)
+    expect(Number(wager.delta)).toBe(Math.min(...rules.tiers))
+    expect(Number(wager.balance_after)).toBe(
+      Number(wager.balance_before) + Math.min(...rules.tiers),
+    )
+  }, 90_000)
+
+  it('lets a player below the smallest tier answer with no wager at all', async (ctx) => {
+    // `live.available` re-checked so the env narrows for `createLivePlayer`.
+    if (!gateLive || !live.available) ctx.skip()
+    if (!live.available) return
+    const rules = await economy(player)
+    const drained = await createLivePlayer(live.env, 'wager-ordering-poor')
+
+    try {
+      const drainedSession = await openSession(drained.client, drained.id)
+      const maxTier = Math.max(...rules.tiers)
+
+      // Empty the reserve exactly: the starting balance equals the largest tier.
+      const first = await loadScenarioForPlay(drained, 'easy')
+      await drained.client.rpc('place_wager', {
+        p_session_id: drainedSession,
+        p_scenario_id: first.id,
+        p_stake: maxTier,
+      })
+      const lost = await recordAttempt(drained.client, {
+        playerId: drained.id,
+        sessionId: drainedSession,
+        scenarioId: first.id,
+        choiceId: first.trap.choiceId,
+        outcomeId: first.trap.outcomeId,
+        skipWager: true,
+      })
+      await drained.client.rpc('award_attempt_xp', { p_attempt_id: lost })
+
+      const emptied = (await drained.client.rpc('insight_wallet')).data as Record<string, unknown>
+      expect(Number(emptied.balance)).toBe(0)
+
+      // Zero Insight: the gate stands aside and the answer goes straight through.
+      const second = await loadScenarioForPlay(drained, 'medium')
+      const attemptId = await recordAttempt(drained.client, {
+        playerId: drained.id,
+        sessionId: drainedSession,
+        scenarioId: second.id,
+        choiceId: second.correct.choiceId,
+        outcomeId: second.correct.outcomeId,
+        skipWager: true,
+      })
+      const awarded = await drained.client.rpc('award_attempt_xp', { p_attempt_id: attemptId })
+
+      expect(awarded.error).toBeNull()
+      expect((awarded.data as Record<string, unknown>).wager).toBeNull()
+      expect(Number((awarded.data as Record<string, unknown>).awarded)).toBeGreaterThan(0)
+
+      /*
+       * Now in the 1-to-9 band: one recognition award, still under the smallest
+       * tier. The band a naive "balance > 0 means mandatory" rule would strand
+       * with a compulsory wager it cannot afford.
+       */
+      const rebuilt = (await drained.client.rpc('insight_wallet')).data as Record<string, unknown>
+      expect(Number(rebuilt.balance)).toBe(rules.recognitionAward)
+      expect(Number(rebuilt.balance)).toBeGreaterThan(0)
+      expect(Number(rebuilt.balance)).toBeLessThan(Math.min(...rules.tiers))
+      expect(rebuilt.affordable).toEqual([])
+
+      const third = await loadScenarioForPlay(drained, 'hard')
+      const banded = await recordAttempt(drained.client, {
+        playerId: drained.id,
+        sessionId: drainedSession,
+        scenarioId: third.id,
+        choiceId: third.correct.choiceId,
+        outcomeId: third.correct.outcomeId,
+        skipWager: true,
+      })
+
+      expect(banded).toBeTruthy()
+
+      // Insight never went below zero at any point in that sequence.
+      const finalWallet = (await drained.client.rpc('insight_wallet')).data as Record<
+        string,
+        unknown
+      >
+      expect(Number(finalWallet.balance)).toBeGreaterThanOrEqual(0)
+    } finally {
+      await drained.dispose()
+    }
+  }, 240_000)
+
+  it('keeps an attempt recorded before the gate existed replayable', async (ctx) => {
+    if (!gateLive) ctx.skip()
+    /*
+     * Idempotency has to survive the new rule. An attempt from the old flow has
+     * no wager row, so a gate placed ahead of the existing-attempt lookup would
+     * turn every replay of it into a refusal. Re-submitting must still return the
+     * decision on record.
+     */
+    const scenario = await loadScenarioForPlay(player, 'expert')
+    await player.client.rpc('place_wager', {
+      p_session_id: sessionId,
+      p_scenario_id: scenario.id,
+      p_stake: Math.min(...(await economy(player)).tiers),
+    })
+
+    const first = await recordAttempt(player.client, {
+      playerId: player.id,
+      sessionId,
+      scenarioId: scenario.id,
+      choiceId: scenario.correct.choiceId,
+      outcomeId: scenario.correct.outcomeId,
+      skipWager: true,
+    })
+
+    // The wager is now resolved, so a second submit has no *open* wager to find.
+    await player.client.rpc('award_attempt_xp', { p_attempt_id: first })
+
+    const replay = await recordAttempt(player.client, {
+      playerId: player.id,
+      sessionId,
+      scenarioId: scenario.id,
+      choiceId: scenario.correct.choiceId,
+      outcomeId: scenario.correct.outcomeId,
+      skipWager: true,
+    })
+
+    expect(replay).toBe(first)
+
+    const { data: rows } = await player.client
+      .from('attempts')
+      .select('id')
+      .eq('player_id', player.id)
+      .eq('scenario_id', scenario.id)
+
+    expect(rows ?? []).toHaveLength(1)
+  }, 120_000)
+
+  it('will not let a locked stake be committed twice', async (ctx) => {
+    if (!gateLive) ctx.skip()
+    const rules = await economy(player)
+    const scenario = await loadScenarioForPlay(player, 'easy')
+
+    const first = await player.client.rpc('place_wager', {
+      p_session_id: sessionId,
+      p_scenario_id: scenario.id,
+      p_stake: Math.min(...rules.tiers),
+    })
+    expect((first.data as Record<string, unknown>).accepted).toBe(true)
+
+    // A second lock at a different amount returns the original, unchanged.
+    const second = await player.client.rpc('place_wager', {
+      p_session_id: sessionId,
+      p_scenario_id: scenario.id,
+      p_stake: Math.max(...rules.tiers),
+    })
+    const payload = second.data as Record<string, unknown>
+
+    expect(payload.reason).toBe('already_locked')
+    expect(Number(payload.stake)).toBe(Math.min(...rules.tiers))
+  }, 90_000)
 })
 
 describe.skipIf(!live.available)('a drained reserve (live database)', () => {

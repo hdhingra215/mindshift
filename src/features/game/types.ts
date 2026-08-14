@@ -194,6 +194,15 @@ export type InsightWallet = {
   balance: number
   /** Every stake the economy defines, affordable or not. */
   tiers: readonly number[]
+  /**
+   * The stakes this balance can actually cover, ascending — **as the server
+   * computed them**, not as the client filtered them.
+   *
+   * It matters now that affordability decides whether the wager is *mandatory*:
+   * a client that derived its own list could block a player the server would
+   * have waved through, or wave through one the server will refuse.
+   */
+  affordable: readonly number[]
   /** Insight earned per correct decision, wagered or not. The recovery path. */
   recognitionAward: number
 }
@@ -216,13 +225,28 @@ export type WagerOutcome = {
 }
 
 /**
- * The wager step's lifecycle, mirroring the server's.
+ * The wager step's lifecycle, mirroring the server's — and, since the wager now
+ * precedes the answer, the gate the decision waits behind.
  *
- * `unavailable` is a first-class state, not an error: a player with an empty
- * reserve, or a deployment predating the economy, plays the scenario exactly as
- * before. The wager may never be able to block the game.
+ * ── Why `pending` exists ────────────────────────────────────────────────────
+ * The reserve is read asynchronously. While the wager was optional an unread
+ * reserve was harmless; now it decides whether a stake is *required*, so
+ * "not yet known" must be its own state that keeps the answers shut. Treating
+ * an unread reserve as "no balance" would let an affordable player answer, and
+ * `submit_attempt` would then refuse them — a dead end the player cannot see.
+ * A read that fails stays `pending` (with `unreadable`) and offers a retry.
+ *
+ * ── Why `unavailable` is narrower than it looks ─────────────────────────────
+ * Reserved for a deployment where the economy genuinely is not there (the RPC
+ * does not exist). That server has no ordering gate either, so answering is
+ * safe — which is the only reason it may enable the answers. A *transient*
+ * failure is not this state.
+ *
+ * `skipped` is the low-reserve path: a player who cannot cover the smallest
+ * tier answers directly and is never stuck.
  */
 export type WagerPhase =
+  | { status: 'pending'; /** The reserve read failed; the player may retry. */ unreadable: boolean }
   | { status: 'unavailable' }
   | { status: 'offered'; wallet: InsightWallet }
   | { status: 'locking'; wallet: InsightWallet; stake: number }

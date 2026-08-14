@@ -302,7 +302,9 @@ Pipeline is now complete: attempt → XP → progress → mastery → achievemen
 
 `20260812000003` (table + functions), `…0004` and `…0005` (privileges — see the banner). One table, seven functions, `award_attempt_xp` replaced to add the resolution step.
 
-**The mechanic.** Two decisions before the outcome: *what do I think is right*, and *how much do I trust that*. Confidence already existed as a reflection slider that costs nothing, so it measures a feeling; a wager measures a commitment. Both are kept — `confidence_before` is untouched — which gives two distinct signals: **calibration** (stated confidence vs correctness) and **conviction** (stake size vs correctness).
+**The mechanic.** Two decisions before the outcome: *how much do I trust my read of this*, and *what do I actually think is right*. Confidence already existed as a reflection slider that costs nothing, so it measures a feeling; a wager measures a commitment. Both are kept — `confidence_before` is untouched — which gives two distinct signals: **calibration** (stated confidence vs correctness) and **conviction** (stake size vs correctness).
+
+⚠ **The order of those two reversed in Phase 9.2 — see §4.8.** As shipped in 8.5 the player chose an answer first and the wager panel unlocked afterwards, so the stake measured confidence in an already-chosen option, and skipping was free and therefore usual. The stake now comes first and is compulsory whenever the reserve can cover one.
 
 **Insight is not XP, and that is the load-bearing decision.** XP is lifetime and monotonic and `current_level` is derived from it, so a losing wager that subtracted XP could *de-level* a player — punishing a wrong answer, which §12.20 forbids. Insight is its own quantity: earned by play, spent only on conviction, never convertible, **no real-world value**, cannot be purchased, transferred or withdrawn.
 
@@ -317,7 +319,7 @@ Pipeline is now complete: attempt → XP → progress → mastery → achievemen
 
 **Balance is derived, never stored.** `starting + recognition × (correct decisions) + Σ delta over resolved wagers`. No ledger table needed — every term is already recorded, so it self-heals like `progress` and `streaks`. Because a stake can never exceed the balance at lock time and the only negative term is bounded by that stake, **a negative balance is unreachable by construction**, enforced again by a CHECK constraint.
 
-**Zero balance is a designed state, not a wall.** No stake is offered, the scenario plays exactly as before, and every correct answer rebuilds the reserve by 5. No stipend, no hand-out, no pressure copy.
+**Zero balance is a designed state, not a wall.** No stake is offered, the scenario plays exactly as before, and every correct answer rebuilds the reserve by 5. No stipend, no hand-out, no pressure copy. Since 9.2 this is also the *only* path to an unwagered answer, and it extends to any balance under the smallest tier — see §4.8.
 
 **Lifecycle** — read from the row, same shape as `twin_predictions`: absent = *unwagered* · present with `attempt_id` null = *locked* · otherwise *resolved*.
 
@@ -336,6 +338,47 @@ Pipeline is now complete: attempt → XP → progress → mastery → achievemen
 **Twin independence.** The Twin's prediction is visible before the player stakes but is never wired into the wager — no defaulting, no nudging, no shared state. After resolution the wager result renders above the Twin verdict: the player's own commitment settles before the model's opinion of it.
 
 **Analytics groundwork only.** `attempt_wagers` stores stake, `balance_before`, correctness and delta per scenario, which is enough for future work on wager accuracy, accuracy by stake size, and confidence-vs-conviction. **No Archive or analytics UI was built** — that is a later phase, and the existing sample-size discipline (§4.6) applies when it lands.
+
+---
+
+### 4.8 Conviction before the answer (Phase 9.2)
+
+`20260814000001_phase9_2_wager_before_answer.sql` — one `create or replace` of `submit_attempt`. **No schema change, no new function, no RLS change, signature untouched**, so the surface the privilege sweep enumerates is identical.
+
+**What reversed, and why it needed a migration.** 8.5 built the wager so it *could* precede the attempt — keyed on `(session, scenario)` rather than `attempt_id` precisely so the row provably predates the answer — but never *required* it. The panel unlocked only once a choice was selected, and the copy read "answer without one — skipping costs nothing", so the stake was optional and mostly skipped. Now the stake leads and gates the answer.
+
+The enforcement cannot live in the client: `submit_attempt` is a granted RPC any signed-in player can call with any arguments, so an interface-only rule is one `supabase.rpc()` call from being bypassed — and the thing bypassed is the measurement the mechanic exists to take.
+
+**The wagered quantity is still Insight.** Nothing in 9.2 touches XP. XP stays lifetime and monotonic with `current_level` derived from it, because a wager that could subtract XP could de-level a player and §12.20 forbids punishing a wrong answer. No tier, payout, balance formula or constant changed — only *when* a stake must exist.
+
+**A stake is compulsory exactly when the reserve can cover one.** Below the smallest tier the answer proceeds unwagered. That deliberately covers an empty reserve **and the 1-to-9 band above it**, which a naive "balance > 0" rule would strand with a mandatory wager it cannot afford. Expressed in SQL as "is any tier affordable" rather than `balance >= 10`, so retuning `insight_wager_tiers()` cannot desynchronise the rule.
+
+**Order inside the function.** auth → session ownership → advisory lock → choice validation → **existing-attempt lookup** → *(new attempts only)* wager gate → insert. The lookup stays ahead of the gate: attempts are immutable and re-submitting returns the recorded decision, and an attempt from the old flow has no wager row — a gate placed earlier would turn every replay of one into a refusal.
+
+**Locking.** Takes the same per-player advisory lock as `place_wager` and `award_attempt_xp`, so the balance the gate reads cannot move under it while a stake is placed in another tab. It also closes a pre-existing race unrelated to wagers: `attempts` carries no unique constraint on `(player, session, scenario)`, so the select-then-insert could previously admit two concurrent submissions for one scenario.
+
+**Client state machine.** `WagerPhase` gained `pending` and activated the already-declared `skipped`:
+
+| State | Answers | Meaning |
+|---|---|---|
+| `pending` | disabled | Reserve unread, or unread after its bounded retry (`unreadable: true`, offers another) |
+| `offered` | disabled | A tier is affordable, so a stake is compulsory |
+| `locking` | disabled | `place_wager` in flight |
+| `locked` | **enabled** | Stake committed |
+| `skipped` | **enabled** | No affordable tier — answer directly |
+| `unavailable` | **enabled** | No economy on this deployment, so no gate server-side either |
+
+`wagerSettled` (= `locked | skipped | unavailable`) is the **single** source of truth for whether answers may be touched, and `canAnswer(gamePhase, wager)` is what the reducer calls to *reject* `SELECT` and `SUBMIT_START`. A disabled control is a courtesy; the reducer refusing the action is the enforcement.
+
+⚠ **An unread reserve may not collapse into "no balance".** It would let an affordable player answer and be refused by the server with no way to see why. The read retries three times, and a read that still fails stays `pending` with a retry rather than guessing. `unavailable` is reserved for a deployment where `insight_wallet` does not exist — the only case where enabling the answers cannot contradict the server.
+
+**Answer clock.** `response_time_ms` is restarted on the edge into the answer step (`shouldRestartAnswerClock`), not at scenario load. Timing from the load would bill wager deliberation to the one number that claims to measure how long the player weighed their *choice*, inflating `sessions.average_response_time_ms` and the Archive's median deliberation reading.
+
+**Affordability has one author.** `insight_wallet()` already returned `affordable`; the client dropped it and re-filtered `tiers` against the balance. Harmless while the wager was optional, wrong once affordability decides whether a stake is compulsory — a disagreement would block a player the server would have waved through. `InsightWallet.affordable` now carries the server's list and `affordableTiers` returns it.
+
+⚠ **Deploy the migration with the client, not before it.** An active gate under the previous client refuses every affordable player's answer, because that client never places a wager. The live suite probes for the gate and skips its 9.2 assertions loudly when it is absent, rather than reporting a pass over an unenforced rule.
+
+⚠ **Conviction readings now mean two different things.** Wagers recorded before 9.2 measured confidence in an answer the player had already chosen; wagers after it measure confidence in their read of the scenario. Nothing distinguishes the two rows, and the Archive's conviction plate (§5.2) mixes them. Sample sizes are small enough that this washes out quickly, but it is a real discontinuity and is not corrected anywhere.
 
 ---
 

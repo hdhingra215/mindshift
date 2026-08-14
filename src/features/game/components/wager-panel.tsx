@@ -9,7 +9,9 @@ import { cn } from '@/lib/utils'
 import {
   affordableTiers,
   describeEmptyReserve,
+  describeReserveUnreadable,
   describeWagerIntro,
+  describeWagerRequirement,
   formatInsight,
   projectBalance,
 } from '../lib/wager'
@@ -17,11 +19,11 @@ import type { WagerPhase } from '../types'
 
 type WagerPanelProps = {
   phase: WagerPhase
-  /** True once the player has chosen an answer. The wager is the second decision. */
-  enabled: boolean
   selectedStake: number | null
   onSelectStake: (stake: number | null) => void
   onLock: () => void
+  /** Another attempt at the reserve, after a read that failed its retries. */
+  onRetryRead: () => void
 }
 
 /**
@@ -47,19 +49,55 @@ type WagerPanelProps = {
  */
 export function WagerPanel({
   phase,
-  enabled,
   selectedStake,
   onSelectStake,
   onLock,
+  onRetryRead,
 }: WagerPanelProps) {
+  /*
+   * No economy on this deployment. The server has no ordering gate either, so
+   * the answers are already open and there is nothing for this panel to say.
+   */
   if (phase.status === 'unavailable') return null
 
-  const wallet = phase.wallet
-  const tiers = affordableTiers(wallet)
-  const isLocked = phase.status === 'locked'
-  const isLocking = phase.status === 'locking'
+  /*
+   * The reserve has not resolved. The answers are shut behind this, so the panel
+   * has to account for itself rather than sit blank — and when the read has given
+   * up, offer the way out instead of stranding the player.
+   */
+  if (phase.status === 'pending') {
+    return (
+      <RevealContainer className="mx-auto w-full max-w-2xl" delay={80} distance="sm">
+        <InstrumentFrame as="section" className="px-5 py-4" legend="Insight reserve">
+          {phase.unreadable ? (
+            <>
+              <p className="text-xs leading-relaxed text-muted-foreground" role="status">
+                {describeReserveUnreadable()}
+              </p>
+              <div className="mt-3">
+                <Button onClick={onRetryRead} size="lg" type="button" variant="outline">
+                  Try again
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p aria-live="polite" className="text-xs text-muted-foreground">
+              Reading your Insight reserve…
+            </p>
+          )}
+        </InstrumentFrame>
+      </RevealContainer>
+    )
+  }
 
-  if (tiers.length === 0 && !isLocked) {
+  const wallet = phase.wallet
+
+  /*
+   * Below the smallest tier — an empty reserve, or the band just above it. The
+   * player goes straight to the answer, and the copy has to say so plainly:
+   * running low on Insight may not read as being locked out of the game.
+   */
+  if (phase.status === 'skipped') {
     return (
       <RevealContainer className="mx-auto w-full max-w-2xl" delay={80} distance="sm">
         <InstrumentFrame as="section" className="px-5 py-4" legend="Insight reserve">
@@ -71,6 +109,10 @@ export function WagerPanel({
       </RevealContainer>
     )
   }
+
+  const tiers = affordableTiers(wallet)
+  const isLocked = phase.status === 'locked'
+  const isLocking = phase.status === 'locking'
 
   const projection = selectedStake ? projectBalance(wallet, selectedStake) : null
 
@@ -90,6 +132,16 @@ export function WagerPanel({
         <p className="mt-1.5 text-xs leading-relaxed text-pretty text-muted-foreground">
           {describeWagerIntro(wallet)}
         </p>
+
+        {/*
+         * That the stake comes first, stated once and up front. Not framed as a
+         * requirement imposed on the player — it is how you commit to a read.
+         */}
+        {!isLocked ? (
+          <p className="mt-2 text-xs leading-relaxed font-medium text-foreground">
+            {describeWagerRequirement()}
+          </p>
+        ) : null}
 
         <div
           aria-label="How much Insight to stake"
@@ -111,7 +163,7 @@ export function WagerPanel({
                     : 'border-border/70 text-muted-foreground hover:border-border',
                   (isLocked || isLocking) && 'pointer-events-none opacity-60',
                 )}
-                disabled={!enabled || isLocked || isLocking}
+                disabled={isLocked || isLocking}
                 key={tier}
                 onClick={() => {
                   // A detent on a dial: dry, mechanical, no pitch to speak of.
@@ -138,16 +190,16 @@ export function WagerPanel({
          */}
         <p aria-live="polite" className="mt-3 min-h-[1.25rem] text-xs text-muted-foreground">
           {isLocked && phase.status === 'locked'
-            ? `Locked at ${formatInsight(phase.wager.stake)}. This one is committed.`
+            ? `Locked at ${formatInsight(phase.wager.stake)}. This one is committed — your options are open.`
             : projection
               ? `Right: ${formatInsight(projection.ifRight)}. Wrong: ${formatInsight(projection.ifWrong)}.`
-              : 'Choose a stake, or answer without one — skipping costs nothing.'}
+              : 'Choose how much you’d back your read of this one.'}
         </p>
 
         {!isLocked ? (
           <div className="mt-4 flex items-center gap-3">
             <Button
-              disabled={!enabled || selectedStake === null || isLocking}
+              disabled={selectedStake === null || isLocking}
               onClick={onLock}
               size="lg"
               // The same weight as committing an answer, because staking
@@ -158,9 +210,6 @@ export function WagerPanel({
               <Lock aria-hidden="true" className="size-4" />
               {isLocking ? 'Locking…' : 'Lock in'}
             </Button>
-            {!enabled ? (
-              <p className="text-xs text-muted-foreground">Pick your answer first.</p>
-            ) : null}
           </div>
         ) : null}
       </InstrumentFrame>

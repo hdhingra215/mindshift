@@ -24,6 +24,19 @@ const GENERIC_LOAD_ERROR =
 const GENERIC_WRITE_ERROR =
   'That didn’t save just now. Nothing’s lost — give it another go.'
 
+/**
+ * The ordering gate declining an answer that has no wager behind it.
+ *
+ * Exported so the session hook can tell this refusal apart from a write failure
+ * and reopen the wager step, rather than inviting the player to retry an answer
+ * the server will refuse again. Compared by identity, never re-derived.
+ */
+export const WAGER_REQUIRED_ERROR =
+  'Back your confidence first — this scenario needs your stake before your answer.'
+
+/** How `submit_attempt` names that refusal. Raised as P0001, not a privilege error. */
+const WAGER_REQUIRED_PATTERN = /wager is required/i
+
 // --- Session ---------------------------------------------------------------
 
 /**
@@ -180,7 +193,12 @@ export async function submitAttempt(params: {
 
   if (error) {
     console.error(`[game:submit:${error.code}] ${error.message}`)
-    return { data: null, error: GENERIC_WRITE_ERROR }
+    return {
+      data: null,
+      error: WAGER_REQUIRED_PATTERN.test(error.message)
+        ? WAGER_REQUIRED_ERROR
+        : GENERIC_WRITE_ERROR,
+    }
   }
 
   const parsed = submitResultSchema.safeParse(data)

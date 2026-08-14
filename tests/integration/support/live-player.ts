@@ -169,6 +169,36 @@ export async function openSession(
   return data.id
 }
 
+/** How `submit_attempt`'s ordering gate names a missing wager. */
+const WAGER_REQUIRED = /wager is required/i
+
+/**
+ * Lock the smallest affordable stake, if the reserve can cover one.
+ *
+ * Returns whether a stake is now on the table. `place_wager` is re-entrant, so a
+ * scenario the caller already staked on keeps its original stake rather than
+ * being overwritten — which is what lets this run unconditionally.
+ */
+async function stakeMinimum(
+  client: SupabaseClient<Database>,
+  sessionId: string,
+  scenarioId: string,
+): Promise<boolean> {
+  const wallet = (await client.rpc('insight_wallet')).data as { affordable?: unknown } | null
+  const affordable = Array.isArray(wallet?.affordable)
+    ? wallet.affordable.map(Number).sort((a, b) => a - b)
+    : []
+
+  if (affordable.length === 0) return false
+
+  const placed = await client.rpc('place_wager', {
+    p_session_id: sessionId,
+    p_scenario_id: scenarioId,
+    p_stake: affordable[0]!,
+  })
+  return (placed.data as { accepted?: boolean } | null)?.accepted === true
+}
+
 /**
  * Record a decision through the only path that exists.
  *
@@ -180,6 +210,18 @@ export async function openSession(
  * `outcomeId` is still accepted so existing call sites read unchanged, but it is
  * deliberately ignored: the server derives the outcome from the choice, and a
  * fixture that could override it would not be testing the product.
+ *
+ * ── Why this retries rather than always staking first ───────────────────────
+ * Phase 9.2 requires a locked wager before an affordable player may answer. This
+ * helper is used by every suite, most of which care nothing about the economy, so
+ * it plays the scenario the way a player now has to: submit, and if the ordering
+ * gate declines, lock the smallest affordable stake and submit again.
+ *
+ * Reacting to the refusal rather than pre-emptively staking keeps the suites
+ * honest on either side of that deployment — no wager is invented on a server
+ * that does not ask for one, so the tests that assert an *unwagered* attempt
+ * still describe something real. `skipWager` opts out entirely, for the tests
+ * whose subject is the gate itself.
  */
 export async function recordAttempt(
   client: SupabaseClient<Database>,
@@ -190,18 +232,48 @@ export async function recordAttempt(
     choiceId: string
     outcomeId?: string
     responseTimeMs?: number
+    /** Never pre-stake, so a refusal surfaces as a thrown error. */
+    skipWager?: boolean
   },
 ): Promise<string> {
-  const { data, error } = await client.rpc('submit_attempt', {
-    p_session_id: params.sessionId,
-    p_scenario_id: params.scenarioId,
-    p_choice_id: params.choiceId,
-    p_response_time_ms: params.responseTimeMs ?? 9_000,
-  })
+  const submit = () =>
+    client.rpc('submit_attempt', {
+      p_session_id: params.sessionId,
+      p_scenario_id: params.scenarioId,
+      p_choice_id: params.choiceId,
+      p_response_time_ms: params.responseTimeMs ?? 9_000,
+    })
+
+  let { data, error } = await submit()
+
+  if (error && !params.skipWager && WAGER_REQUIRED.test(error.message)) {
+    const staked = await stakeMinimum(client, params.sessionId, params.scenarioId)
+    if (!staked) {
+      throw new Error(
+        `submit_attempt demanded a wager the reserve could not cover: ${error.message}`,
+      )
+    }
+    ;({ data, error } = await submit())
+  }
 
   if (error) throw new Error(`submit_attempt failed: ${error.message}`)
 
   const attemptId = (data as { attempt_id?: string } | null)?.attempt_id
   if (!attemptId) throw new Error('submit_attempt returned no attempt id')
   return attemptId
+}
+
+/**
+ * Does this error message mean the Phase 9.2 ordering gate declined?
+ *
+ * Exported so a suite can tell "the gate refused me" from a genuine failure, and
+ * so the string is matched in exactly one place. The gate has to be detected
+ * rather than assumed: the migration ships *with* the client that stakes first,
+ * because an active gate under the previous client would refuse every affordable
+ * player's answer. A suite whose subject is the gate says so loudly and stops
+ * when it is absent — a silent pass over an unenforced rule is the one outcome
+ * worth ruling out.
+ */
+export function isWagerRequiredError(message: string | undefined): boolean {
+  return message !== undefined && WAGER_REQUIRED.test(message)
 }
